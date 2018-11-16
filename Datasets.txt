@@ -1,0 +1,2 @@
+--- Updated 2018-11-16 -----------
+File containing the links to public segmentation benchmarks. 
