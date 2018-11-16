@@ -16,3 +16,5 @@ $ python main.py --training True
 ```
 $ python main.py --testing True
 ```
+
+## We need to edit the data processing and loss pass to implement the proposed model.
