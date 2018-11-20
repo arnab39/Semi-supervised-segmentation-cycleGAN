@@ -2,3 +2,6 @@
 *.xml
 *.DS_Store
 datasets/VOC2012/*
+
+# local files
+*/.idea/
