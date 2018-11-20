@@ -24,7 +24,7 @@ def cuda(xs):
         else:
             return [x.cuda() for x in xs]
 
-# For Pytorch data loader
+# For Pytorch datasets loader
 def create_link(dataset_dir):
     dirs = {}
     dirs['trainA'] = os.path.join(dataset_dir, 'ltrainA')
