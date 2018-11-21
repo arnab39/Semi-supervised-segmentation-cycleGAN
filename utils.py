@@ -23,6 +23,7 @@ def cuda(xs):
             return xs.cuda()
         else:
             return [x.cuda() for x in xs]
+    return xs
 
 # For Pytorch datasets loader
 def create_link(dataset_dir):

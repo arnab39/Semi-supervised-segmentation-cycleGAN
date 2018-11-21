@@ -1,82 +1,42 @@
-import itertools
-import functools
-
 import os
+from itertools import cycle
+
 import torch
 from torch import nn
 from torch.autograd import Variable
 import torchvision.datasets as dsets
+from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import utils
-from ops import conv_bn_lrelu, conv_bn_relu, dconv_bn_relu, ResidualBlock
-
-
-class Discriminator(nn.Module):
-    def __init__(self, dim=64):
-        super(Discriminator, self).__init__()
-        self.dis = nn.Sequential(nn.Conv2d(3, dim, 4, 2, 1), nn.LeakyReLU(0.2),
-                                conv_bn_lrelu(dim * 1, dim * 2, 4, 2, 1),
-                                conv_bn_lrelu(dim * 2, dim * 4, 4, 2, 1),
-                                conv_bn_lrelu(dim * 4, dim * 8, 4, 1, (1, 2)),
-                                nn.Conv2d(dim * 8, 1, 4, 1, (2, 1)))
-
-    def forward(self, x):
-        return self.dis(x)
-
-
-
-class Generator(nn.Module):
-    def __init__(self, dim=64):
-        super(Generator, self).__init__()
-        self.gen = nn.Sequential(nn.ReflectionPad2d(3),
-                                conv_bn_relu(3, dim * 1, 7, 1),
-                                conv_bn_relu(dim * 1, dim * 2, 3, 2, 1),
-                                conv_bn_relu(dim * 2, dim * 4, 3, 2, 1),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                dconv_bn_relu(dim * 4, dim * 2, 3, 2, 1, 1),
-                                dconv_bn_relu(dim * 2, dim * 1, 3, 2, 1, 1),
-                                nn.ReflectionPad2d(3),
-                                nn.Conv2d(dim, 3, 7, 1),
-                                nn.Tanh())
-
-    def forward(self, x):
-        return self.gen(x)
-
-
+from arch import Generator, Discriminator
+from datasets import PILaugment, VOCDataset, get_transformation
 
 '''
 Class for CycleGAN with train() as a member function
 
 '''
+
+
 class cycleGAN(object):
-    def __init__(self,args):
+    def __init__(self, args):
 
         utils.cuda_devices([args.gpu_id])
 
         # Define the network 
-        self.Da = Discriminator()
-        self.Db = Discriminator()
-        self.Gab = Generator()
-        self.Gba = Generator()
+        self.Di = Discriminator(in_dim=3)
+        self.Ds = Discriminator(in_dim=1)
+        self.Gis = Generator(in_dim=1, out_dim=3)  # for segmentaion to image
+        self.Gsi = Generator(in_dim=3, out_dim=1)  # for image to segmentation
 
         self.MSE = nn.MSELoss()
         self.L1 = nn.L1Loss()
 
-        utils.cuda([self.Da, self.Db, self.Gab, self.Gba])
+        utils.cuda([self.Di, self.Ds, self.Gis, self.Gsi])
 
-        self.da_optimizer = torch.optim.Adam(self.Da.parameters(), lr=args.lr, betas=(0.5, 0.999))
-        self.db_optimizer = torch.optim.Adam(self.Db.parameters(), lr=args.lr, betas=(0.5, 0.999))
-        self.gab_optimizer = torch.optim.Adam(self.Gab.parameters(), lr=args.lr, betas=(0.5, 0.999))
-        self.gba_optimizer = torch.optim.Adam(self.Gba.parameters(), lr=args.lr, betas=(0.5, 0.999))
-
+        self.di_optimizer = torch.optim.Adam(self.Di.parameters(), lr=args.lr, betas=(0.5, 0.999))
+        self.ds_optimizer = torch.optim.Adam(self.Ds.parameters(), lr=args.lr, betas=(0.5, 0.999))
+        self.gsi_optimizer = torch.optim.Adam(self.Gsi.parameters(), lr=args.lr, betas=(0.5, 0.999))
+        self.gis_optimizer = torch.optim.Adam(self.Gis.parameters(), lr=args.lr, betas=(0.5, 0.999))
 
         if not os.path.isdir(args.checkpoint_dir):
             os.makedirs(args.checkpoint_dir)
@@ -84,62 +44,63 @@ class cycleGAN(object):
         try:
             ckpt = utils.load_checkpoint('%s/latest.ckpt' % (args.checkpoint_dir))
             self.start_epoch = ckpt['epoch']
-            self.Da.load_state_dict(ckpt['Da'])
-            self.Db.load_state_dict(ckpt['Db'])
-            self.Gab.load_state_dict(ckpt['Gab'])
-            self.Gba.load_state_dict(ckpt['Gba'])
-            self.da_optimizer.load_state_dict(ckpt['da_optimizer'])
-            self.db_optimizer.load_state_dict(ckpt['db_optimizer'])
-            self.gab_optimizer.load_state_dict(ckpt['gab_optimizer'])
-            self.gba_optimizer.load_state_dict(ckpt['gba_optimizer'])
+            self.Di.load_state_dict(ckpt['Di'])
+            self.Ds.load_state_dict(ckpt['Ds'])
+            self.Gis.load_state_dict(ckpt['Gis'])
+            self.Gsi.load_state_dict(ckpt['Gsi'])
+            self.di_optimizer.load_state_dict(ckpt['di_optimizer'])
+            self.ds_optimizer.load_state_dict(ckpt['ds_optimizer'])
+            self.gis_optimizer.load_state_dict(ckpt['gis_optimizer'])
+            self.gsi_optimizer.load_state_dict(ckpt['gsi_optimizer'])
         except:
             print(' [*] No checkpoint!')
             self.start_epoch = 0
 
-
-
-    def train(self,args):
+    def train(self, args):
         # For transforming the input image
-        transform = transforms.Compose(
-            [transforms.RandomHorizontalFlip(),
-             transforms.Resize((args.img_height,args.img_width)),
-             transforms.ToTensor(),
-             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
+        # transform = transforms.Compose(
+        #     [transforms.RandomHorizontalFlip(),
+        #      transforms.Resize((args.img_height,args.img_width)),
+        #      transforms.ToTensor(),
+        #      transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
 
-        dataset_dirs = utils.get_traindata_link(args.dataset_dir)
+        root = '/Users/jizong/workspace/Semi-supervised-cycleGAN/datasets/VOC2012'
+        img_size = (128,128)
+        transform = get_transformation(img_size)
+        labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform, augmentation=None)
 
-        # Pytorch dataloader
-        a_loader = torch.utils.data.DataLoader(dsets.ImageFolder(dataset_dirs['trainA'], transform=transform), 
-                                                                    batch_size=args.batch_size, shuffle=True, num_workers=4)
-        b_loader = torch.utils.data.DataLoader(dsets.ImageFolder(dataset_dirs['trainB'], transform=transform), 
-                                                                    batch_size=args.batch_size, shuffle=True, num_workers=4)
+        unlabeled_set = VOCDataset(root_path=root, name='unlabel', ratio=0.5, transformation=transform,
+                                   augmentation=None)
+        assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
+
+        labeled_loader_CE = DataLoader(labeled_set, batch_size=1, shuffle=True)
+        labeled_loader = DataLoader(labeled_set, batch_size=1, shuffle=True)
+        unlabeled_loader = DataLoader(unlabeled_set, batch_size=1, shuffle=True)
 
         a_fake_sample = utils.Sample_from_Pool()
         b_fake_sample = utils.Sample_from_Pool()
 
         for epoch in range(self.start_epoch, args.epochs):
-            for i, (a_real, b_real) in enumerate(zip(a_loader, b_loader)):
+            for i, ((_, real_gt, _), (real_img, _, _)) in enumerate(zip(labeled_loader, unlabeled_loader)):
                 # step
-                step = epoch * min(len(a_loader), len(b_loader)) + i + 1
+                step = epoch * min(len(labeled_loader), len(unlabeled_loader)) + i + 1
 
                 # set train
-                self.Gab.train()
-                self.Gba.train()
+                self.Gis.train()
+                self.Gsi.train()
 
-                a_real = Variable(a_real[0])
-                b_real = Variable(b_real[0])
-                a_real, b_real = utils.cuda([a_real, b_real])
+                real_img, real_gt = utils.cuda([real_img, real_gt])
 
                 # Forward pass through generators
-                a_fake = self.Gab(b_real)
-                b_fake = self.Gba(a_real)
+                fake_img = self.Gis(real_gt.float())
+                fake_gt = self.Gsi(real_img.float())
 
-                a_recon = self.Gab(b_fake)
-                b_recon = self.Gba(a_fake)
+                recon_img = self.Gis(fake_gt.float())
+                recon_gt = self.Gsi(fake_img.float())
 
                 # Adversarial losses
-                a_fake_dis = self.Da(a_fake)
-                b_fake_dis = self.Db(b_fake)
+                fake_img_dis = self.Di(fake_img)
+                fake_gt_dis = self.Ds(fake_gt)
 
                 real_label = utils.cuda(Variable(torch.ones(a_fake_dis.size())))
 
@@ -191,9 +152,9 @@ class cycleGAN(object):
                 self.da_optimizer.step()
                 self.db_optimizer.step()
 
-                print("Epoch: (%3d) (%5d/%5d) | Gen Loss:%.2e | Dis Loss:%.2e" % 
-                                            (epoch, i + 1, min(len(a_loader), len(b_loader)),
-                                                            gen_loss,a_dis_loss+b_dis_loss))
+                print("Epoch: (%3d) (%5d/%5d) | Gen Loss:%.2e | Dis Loss:%.2e" %
+                      (epoch, i + 1, min(len(a_loader), len(b_loader)),
+                       gen_loss, a_dis_loss + b_dis_loss))
 
             # Override the latest checkpoint 
             utils.save_checkpoint({'epoch': epoch + 1,
