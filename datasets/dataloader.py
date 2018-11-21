@@ -2,6 +2,7 @@ import os, pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
 from PIL import Image
+import torch
 
 
 class VOCDataset(Dataset):
@@ -46,7 +47,7 @@ class VOCDataset(Dataset):
             self.imgs = labeled_imgs
         elif self.name == "unlabel":
             self.imgs = unlabeled_imgs
-        elif self.name =='val':
+        elif self.name == 'val':
             self.imgs = val_imgs
         else:
             raise ('{} not defined'.format(self.name))
@@ -60,7 +61,7 @@ class VOCDataset(Dataset):
         gt = Image.open(gt_path).convert('P')
 
         if self.augmentation is not None:
-            img,gt = self.augmentation(img, gt)
+            img, gt = self.augmentation(img, gt)
 
         if self.transformation:
             img = self.transformation['img'](img)
@@ -70,6 +71,8 @@ class VOCDataset(Dataset):
 
     def __len__(self):
         return len(self.imgs)
+
+
 
 
 if __name__ == '__main__':

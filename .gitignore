@@ -5,4 +5,4 @@ datasets/VOC2012/*
 arch/__pycache__/
 arch/__pycache__/*
 datasets/horse2zebra/*
-
+__pycache__/

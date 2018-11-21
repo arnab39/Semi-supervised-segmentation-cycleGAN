@@ -18,8 +18,8 @@ def get_args():
     parser.add_argument('--training', type=bool, default=False)
     parser.add_argument('--testing', type=bool, default=False)
     parser.add_argument('--results_dir', type=str, default='./results')
-    parser.add_argument('--dataset_dir', type=str, default='./datasets/horse2zebra')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/horse2zebra')
+    parser.add_argument('--dataset',type=str,choices=['voc2012'],default='voc2012')
     args = parser.parse_args()
     return args
 
@@ -27,7 +27,6 @@ def get_args():
 def main():
   args = get_args()
 
-  create_link(args.dataset_dir)
   if args.training:
       print("Training")
       model = md.cycleGAN(args)

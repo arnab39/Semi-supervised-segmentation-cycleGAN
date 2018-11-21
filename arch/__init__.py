@@ -1,2 +1,2 @@
 from .generators import Generator
-from .discriminators import Discriminator
+from .discriminators import Discriminator,Discriminator2
