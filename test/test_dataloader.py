@@ -4,7 +4,7 @@ from torchvision.transforms import ToPILImage
 
 
 def test_vocdataset():
-    root = '/Users/jizong/workspace/Semi-supervised-cycleGAN/datasets/VOC2012'
+    root = '../datasets/VOC2012'
     img_size = 256
     transform = get_transformation(img_size)
     voc = VOCDataset(root_path=root, name='label', ratio=1, transformation=transform, augmentation=None)
