@@ -1,7 +1,10 @@
 *.iml
 *.xml
 *.DS_Store
+
+# datasets
 datasets/VOC2012/*
+datasets/horse2zebra/
 
 # local files
 */.idea/

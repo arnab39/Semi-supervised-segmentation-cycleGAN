@@ -1,6 +1,8 @@
 import os, pandas as pd
 import numpy as np
 from torch.utils.data import Dataset
+from torchvision import transforms
+
 from PIL import Image
 
 
@@ -22,11 +24,12 @@ class VOCDataset(Dataset):
         assert np.array(new_ratio).min() > 0 and np.array(new_ratio).max() < 1
         cls.split_ratio = new_ratio
 
-    def __init__(self, root_path, name, ratio=0.5, transformation=None, augmentation=None):
+    def __init__(self, root_path, name='label', ratio=0.5, transformation=None, augmentation=None):
         super(VOCDataset, self).__init__()
         self.root_path = root_path
         self.ratio = ratio
         self.name = name
+        self.n_classes = 21
         assert transformation is not None, 'transformation must be provided, give None'
         self.transformation = transformation
         self.augmentation = augmentation
@@ -35,7 +38,7 @@ class VOCDataset(Dataset):
         assert 0 <= ratio <= 1, 'the ratio between "labeled" and "unlabeled" should be between 0 and 1, given %.1f' % ratio
         np.random.seed(1)
         total_imgs = pd.read_table(
-            os.path.join(self.root_path, 'ImageSets', 'Segmentation', 'trainval.txt')).values.reshape(-1)
+            os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainval.txt')).values.reshape(-1)
         train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),
                                       replace=False)
         val_imgs = [x for x in total_imgs if x not in train_imgs]
@@ -71,4 +74,12 @@ class VOCDataset(Dataset):
 
 
 if __name__ == '__main__':
-    vocdataset = VOCDataset('/Users/jizong/workspace/Semi-supervised-cycleGAN/datasets/VOC2012', 'label')
+    ROOT_PATH = 'VOC2012'
+    NAME = 'label'
+    RATIO = 0.5
+    TF = transforms.Compose([transforms.ToTensor(),
+                             transforms.Normalize([0.485, 0.456, 0.406],
+                                                  [0.229, 0.224, 0.225])])
+
+    vocdataset = VOCDataset(ROOT_PATH, name=NAME, ratio=RATIO, transformation=TF)
+
