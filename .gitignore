@@ -4,7 +4,8 @@
 
 # datasets
 datasets/VOC2012/*
-datasets/horse2zebra/
+datasets/horse2zebra/*
+datasets/Cityscapes/*
 
 # local files
 */.idea/
