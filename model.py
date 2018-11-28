@@ -1,82 +1,111 @@
-import itertools
-import functools
-
 import os
+from itertools import cycle
+
 import torch
 from torch import nn
 from torch.autograd import Variable
 import torchvision.datasets as dsets
+from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import utils
-from ops import conv_bn_lrelu, conv_bn_relu, dconv_bn_relu, ResidualBlock
-
-
-class Discriminator(nn.Module):
-    def __init__(self, dim=64):
-        super(Discriminator, self).__init__()
-        self.dis = nn.Sequential(nn.Conv2d(3, dim, 4, 2, 1), nn.LeakyReLU(0.2),
-                                conv_bn_lrelu(dim * 1, dim * 2, 4, 2, 1),
-                                conv_bn_lrelu(dim * 2, dim * 4, 4, 2, 1),
-                                conv_bn_lrelu(dim * 4, dim * 8, 4, 1, (1, 2)),
-                                nn.Conv2d(dim * 8, 1, 4, 1, (2, 1)))
-
-    def forward(self, x):
-        return self.dis(x)
-
-
-
-class Generator(nn.Module):
-    def __init__(self, dim=64):
-        super(Generator, self).__init__()
-        self.gen = nn.Sequential(nn.ReflectionPad2d(3),
-                                conv_bn_relu(3, dim * 1, 7, 1),
-                                conv_bn_relu(dim * 1, dim * 2, 3, 2, 1),
-                                conv_bn_relu(dim * 2, dim * 4, 3, 2, 1),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                ResidualBlock(dim * 4, dim * 4),
-                                dconv_bn_relu(dim * 4, dim * 2, 3, 2, 1, 1),
-                                dconv_bn_relu(dim * 2, dim * 1, 3, 2, 1, 1),
-                                nn.ReflectionPad2d(3),
-                                nn.Conv2d(dim, 3, 7, 1),
-                                nn.Tanh())
-
-    def forward(self, x):
-        return self.gen(x)
-
-
+from arch import Generator, Discriminator
+from datasets import PILaugment, VOCDataset, get_transformation
+from utils import make_one_hot
 
 '''
 Class for CycleGAN with train() as a member function
 
 '''
-class cycleGAN(object):
-    def __init__(self,args):
+root = '/home/AP84830/Semi-supervised-cycleGAN/datasets/VOC2012'
+
+class supervised_model(object):
+    def __init__(self, args):
 
         utils.cuda_devices([args.gpu_id])
 
         # Define the network 
-        self.Da = Discriminator()
-        self.Db = Discriminator()
-        self.Gab = Generator()
-        self.Gba = Generator()
+        self.Gsi = Generator(in_dim=3, out_dim=22)  # for image to segmentation
+        self.CE = nn.CrossEntropyLoss()
+
+        utils.cuda([self.Gsi])
+        self.gsi_optimizer = torch.optim.Adam(self.Gsi.parameters(), lr=args.lr, betas=(0.9, 0.999))
+
+        if not os.path.isdir(args.checkpoint_dir):
+            os.makedirs(args.checkpoint_dir)
+
+        try:
+            ckpt = utils.load_checkpoint('%s/latest_supervised_model.ckpt' % (args.checkpoint_dir))
+            self.start_epoch = ckpt['epoch']
+            self.Gsi.load_state_dict(ckpt['Gsi'])
+            self.gsi_optimizer.load_state_dict(ckpt['gsi_optimizer'])
+        except:
+            print(' [*] No checkpoint!')
+            self.start_epoch = 0
+
+    def train(self, args):
+        transform = get_transformation((args.img_height, args.img_width))
+
+        ## let the choice of dataset configurable
+        labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform, augmentation=None)
+
+        labeled_loader= DataLoader(labeled_set, batch_size=1, shuffle=True)
+
+        img_fake_sample = utils.Sample_from_Pool()
+        gt_fake_sample = utils.Sample_from_Pool()
+
+        for epoch in range(self.start_epoch, args.epochs):
+            for i, ((l_img, l_gt, _)) in enumerate(zip(labeled_loader)):
+                # step
+                step = epoch * len(labeled_loader) + i + 1
+                print(l_gt.max())
+                # set train
+                self.Gis.train()
+                self.Gsi.train()
+
+                l_img, l_gt = utils.cuda([l_img, l_gt])
+
+                lab_gt = self.Gsi(l_img)
+
+                # Total generators losses
+                fullsupervisedloss = self.CE(lab_gt, l_gt.squeeze(1))
+                # Update generators
+                self.Gsi.zero_grad()
+                fullsupervisedloss.backward()
+                self.gsi_optimizer.step()
+
+
+                print("Epoch: (%3d) (%5d/%5d) | Crossentropy Loss:%.2e" %
+                      (epoch, i + 1, min(len(labeled_loader), len(unlabeled_loader)),
+                       gen_loss, img_dis_loss + gt_dis_loss, fullsupervisedloss.item()))
+
+            # Override the latest checkpoint 
+            utils.save_checkpoint({'epoch': epoch + 1,
+                                   'Gsi': self.Gsi.state_dict(),
+                                   'gsi_optimizer': self.gsi_optimizer.state_dict()},
+                                  '%s/latest_supervised_model.ckpt' % (args.checkpoint_dir))
+
+
+class semisuper_cycleGAN(object):
+    def __init__(self, args):
+
+        utils.cuda_devices([args.gpu_id])
+
+        # Define the network 
+        self.Di = Discriminator(in_dim=3)
+        self.Ds = Discriminator(in_dim=22)  # for voc 2012, there are 22 classes
+        self.Gis = Generator(in_dim=22, out_dim=3)  # for segmentaion to image
+        self.Gsi = Generator(in_dim=3, out_dim=22)  # for image to segmentation
 
         self.MSE = nn.MSELoss()
         self.L1 = nn.L1Loss()
+        self.CE = nn.CrossEntropyLoss()
 
-        utils.cuda([self.Da, self.Db, self.Gab, self.Gba])
+        utils.cuda([self.Di, self.Ds, self.Gis, self.Gsi])
 
-        self.da_optimizer = torch.optim.Adam(self.Da.parameters(), lr=args.lr, betas=(0.5, 0.999))
-        self.db_optimizer = torch.optim.Adam(self.Db.parameters(), lr=args.lr, betas=(0.5, 0.999))
-        self.gab_optimizer = torch.optim.Adam(self.Gab.parameters(), lr=args.lr, betas=(0.5, 0.999))
-        self.gba_optimizer = torch.optim.Adam(self.Gba.parameters(), lr=args.lr, betas=(0.5, 0.999))
-
+        self.di_optimizer = torch.optim.Adam(self.Di.parameters(), lr=args.lr, betas=(0.5, 0.999))
+        self.ds_optimizer = torch.optim.Adam(self.Ds.parameters(), lr=args.lr, betas=(0.5, 0.999))
+        self.gsi_optimizer = torch.optim.Adam(self.Gsi.parameters(), lr=args.lr, betas=(0.5, 0.999))
+        self.gis_optimizer = torch.optim.Adam(self.Gis.parameters(), lr=args.lr, betas=(0.5, 0.999))
 
         if not os.path.isdir(args.checkpoint_dir):
             os.makedirs(args.checkpoint_dir)
@@ -84,125 +113,136 @@ class cycleGAN(object):
         try:
             ckpt = utils.load_checkpoint('%s/latest.ckpt' % (args.checkpoint_dir))
             self.start_epoch = ckpt['epoch']
-            self.Da.load_state_dict(ckpt['Da'])
-            self.Db.load_state_dict(ckpt['Db'])
-            self.Gab.load_state_dict(ckpt['Gab'])
-            self.Gba.load_state_dict(ckpt['Gba'])
-            self.da_optimizer.load_state_dict(ckpt['da_optimizer'])
-            self.db_optimizer.load_state_dict(ckpt['db_optimizer'])
-            self.gab_optimizer.load_state_dict(ckpt['gab_optimizer'])
-            self.gba_optimizer.load_state_dict(ckpt['gba_optimizer'])
+            self.Di.load_state_dict(ckpt['Di'])
+            self.Ds.load_state_dict(ckpt['Ds'])
+            self.Gis.load_state_dict(ckpt['Gis'])
+            self.Gsi.load_state_dict(ckpt['Gsi'])
+            self.di_optimizer.load_state_dict(ckpt['di_optimizer'])
+            self.ds_optimizer.load_state_dict(ckpt['ds_optimizer'])
+            self.gis_optimizer.load_state_dict(ckpt['gis_optimizer'])
+            self.gsi_optimizer.load_state_dict(ckpt['gsi_optimizer'])
         except:
             print(' [*] No checkpoint!')
             self.start_epoch = 0
 
+    def train(self, args):
+        transform = get_transformation((args.img_height, args.img_width))
 
+        ## let the choice of dataset configurable
+        labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform, augmentation=None)
+        unlabeled_set = VOCDataset(root_path=root, name='unlabel', ratio=0.5, transformation=transform,
+                                   augmentation=None)
 
-    def train(self,args):
-        # For transforming the input image
-        transform = transforms.Compose(
-            [transforms.RandomHorizontalFlip(),
-             transforms.Resize((args.img_height,args.img_width)),
-             transforms.ToTensor(),
-             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
+        ##
+        assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
 
-        dataset_dirs = utils.get_traindata_link(args.dataset_dir)
+        labeled_loader = DataLoader(labeled_set, batch_size=1, shuffle=True)
+        unlabeled_loader = DataLoader(unlabeled_set, batch_size=1, shuffle=True)
 
-        # Pytorch dataloader
-        a_loader = torch.utils.data.DataLoader(dsets.ImageFolder(dataset_dirs['trainA'], transform=transform), 
-                                                                    batch_size=args.batch_size, shuffle=True, num_workers=4)
-        b_loader = torch.utils.data.DataLoader(dsets.ImageFolder(dataset_dirs['trainB'], transform=transform), 
-                                                                    batch_size=args.batch_size, shuffle=True, num_workers=4)
-
-        a_fake_sample = utils.Sample_from_Pool()
-        b_fake_sample = utils.Sample_from_Pool()
+        img_fake_sample = utils.Sample_from_Pool()
+        gt_fake_sample = utils.Sample_from_Pool()
 
         for epoch in range(self.start_epoch, args.epochs):
-            for i, (a_real, b_real) in enumerate(zip(a_loader, b_loader)):
+            for i, ((l_img, l_gt, _),(unl_img, _, _)) in enumerate(zip(labeled_loader, unlabeled_loader)):
+
                 # step
-                step = epoch * min(len(a_loader), len(b_loader)) + i + 1
-
+                step = epoch * min(len(labeled_loader), len(unlabeled_loader)) + i + 1
                 # set train
-                self.Gab.train()
-                self.Gba.train()
+                self.Gis.train()
+                self.Gsi.train()
 
-                a_real = Variable(a_real[0])
-                b_real = Variable(b_real[0])
-                a_real, b_real = utils.cuda([a_real, b_real])
+                l_img, unl_img, l_gt = utils.cuda([l_img, unl_img, l_gt])
+
+                ## ================ generator part================================
 
                 # Forward pass through generators
-                a_fake = self.Gab(b_real)
-                b_fake = self.Gba(a_real)
+                fake_img = self.Gis(make_one_hot(l_gt, args.dataset).float())
+                assert fake_img.shape[1] == 3
+                assert fake_img.shape[2] == args.img_height
+                assert fake_img.shape[3] == args.img_width
 
-                a_recon = self.Gab(b_fake)
-                b_recon = self.Gba(a_fake)
+                fake_gt = self.Gsi(unl_img.float())
+                lab_gt = self.Gsi(l_img)
+                
+                assert fake_gt.shape[1] == 22
+                assert fake_img.shape[2] == args.img_height
+                assert fake_img.shape[3] == args.img_width
+
+                recon_img = self.Gis(fake_gt.float())
+                recon_gt = self.Gsi(fake_img.float())
+
 
                 # Adversarial losses
-                a_fake_dis = self.Da(a_fake)
-                b_fake_dis = self.Db(b_fake)
+                fake_img_dis = self.Di(fake_img)
+                fake_gt_dis = self.Ds(fake_gt)
 
-                real_label = utils.cuda(Variable(torch.ones(a_fake_dis.size())))
+                real_label = utils.cuda(Variable(torch.ones(fake_gt_dis.size())))
 
-                a_gen_loss = self.MSE(a_fake_dis, real_label)
-                b_gen_loss = self.MSE(b_fake_dis, real_label)
+                ## here is much better to have a cross entropy loss for classification.
+                img_gen_loss = self.MSE(fake_img_dis, real_label)
+                gt_gen_loss = self.MSE(fake_gt_dis, real_label)
 
                 # Cycle consistency losses
-                a_cycle_loss = self.L1(a_recon, a_real)
-                b_cycle_loss = self.L1(b_recon, b_real)
+                img_cycle_loss = self.L1(recon_img, unl_img)
+                gt_cycle_loss = self.L1(recon_gt, make_one_hot(l_gt, args.dataset ))
 
                 # Total generators losses
-                gen_loss = a_gen_loss + b_gen_loss + a_cycle_loss * args.lamda + b_cycle_loss * args.lamda
+                fullsupervisedloss = self.CE(lab_gt, l_gt.squeeze(1)) + self.MSE(fake_img, l_img)
+                unsupervisedloss = img_gen_loss + gt_gen_loss + img_cycle_loss * args.lamda + gt_cycle_loss * args.lamda
+
+                gen_loss = args.omega * fullsupervisedloss + unsupervisedloss
 
                 # Update generators
-                self.Gab.zero_grad()
-                self.Gba.zero_grad()
+                self.Gis.zero_grad()
+                self.Gsi.zero_grad()
                 gen_loss.backward()
-                self.gab_optimizer.step()
-                self.gba_optimizer.step()
+                self.gis_optimizer.step()
+                self.gsi_optimizer.step()
 
                 # Sample from history of generated images
-                a_fake = Variable(torch.Tensor(a_fake_sample([a_fake.cpu().data.numpy()])[0]))
-                b_fake = Variable(torch.Tensor(b_fake_sample([b_fake.cpu().data.numpy()])[0]))
-                a_fake, b_fake = utils.cuda([a_fake, b_fake])
+                fake_img = Variable(torch.Tensor(img_fake_sample([fake_img.cpu().data.numpy()])[0]))
+                fake_gt = Variable(torch.Tensor(gt_fake_sample([fake_gt.cpu().data.numpy()])[0]))
+                fake_img, fake_gt = utils.cuda([fake_img, fake_gt])
+
+                # ================ Discrminator training===============================
 
                 # Forward pass through discriminators 
-                a_real_dis = self.Da(a_real)
-                a_fake_dis = self.Da(a_fake)
-                b_real_dis = self.Db(b_real)
-                b_fake_dis = self.Db(b_fake)
-                real_label = utils.cuda(Variable(torch.ones(a_real_dis.size())))
-                fake_label = utils.cuda(Variable(torch.zeros(a_fake_dis.size())))
+                unl_img_dis = self.Di(unl_img)
+                fake_img_dis = self.Di(fake_img)
+                real_gt_dis = self.Ds(make_one_hot(l_gt, args.dataset ))
+                fake_gt_dis = self.Ds(fake_gt)
+                real_label = utils.cuda(Variable(torch.ones(unl_img_dis.size())))
+                fake_label = utils.cuda(Variable(torch.zeros(fake_img_dis.size())))
 
                 # Discriminator losses
-                a_dis_real_loss = self.MSE(a_real_dis, real_label)
-                a_dis_fake_loss = self.MSE(a_fake_dis, fake_label)
-                b_dis_real_loss = self.MSE(b_real_dis, real_label)
-                b_dis_fake_loss = self.MSE(b_fake_dis, fake_label)
+                img_dis_real_loss = self.MSE(unl_img_dis, real_label)
+                img_dis_fake_loss = self.MSE(fake_img_dis, fake_label)
+                gt_dis_real_loss = self.MSE(real_gt_dis, real_label)
+                gt_dis_fake_loss = self.MSE(fake_gt_dis, fake_label)
 
                 # Total discriminators losses
-                a_dis_loss = a_dis_real_loss + a_dis_fake_loss
-                b_dis_loss = b_dis_real_loss + b_dis_fake_loss
+                img_dis_loss = img_dis_real_loss + img_dis_fake_loss
+                gt_dis_loss = gt_dis_real_loss + gt_dis_fake_loss
 
                 # Update discriminators
-                self.Da.zero_grad()
-                self.Db.zero_grad()
-                a_dis_loss.backward()
-                b_dis_loss.backward()
-                self.da_optimizer.step()
-                self.db_optimizer.step()
+                self.Di.zero_grad()
+                self.Ds.zero_grad()
+                img_dis_loss.backward()
+                gt_dis_loss.backward()
+                self.di_optimizer.step()
+                self.ds_optimizer.step()
 
-                print("Epoch: (%3d) (%5d/%5d) | Gen Loss:%.2e | Dis Loss:%.2e" % 
-                                            (epoch, i + 1, min(len(a_loader), len(b_loader)),
-                                                            gen_loss,a_dis_loss+b_dis_loss))
-
+                print("Epoch: (%3d) (%5d/%5d) | Dis Loss:%.2e | Unlab Gen Loss:%.2e | Lab Gen loss:%.2e" %
+                      (epoch, i + 1, min(len(labeled_loader), len(unlabeled_loader)),
+                       img_dis_loss+gt_dis_loss, unsupervisedloss, fullsupervisedloss))
             # Override the latest checkpoint 
             utils.save_checkpoint({'epoch': epoch + 1,
-                                   'Da': self.Da.state_dict(),
-                                   'Db': self.Db.state_dict(),
-                                   'Gab': self.Gab.state_dict(),
-                                   'Gba': self.Gba.state_dict(),
-                                   'da_optimizer': self.da_optimizer.state_dict(),
-                                   'db_optimizer': self.db_optimizer.state_dict(),
-                                   'gab_optimizer': self.gab_optimizer.state_dict(),
-                                   'gba_optimizer': self.gba_optimizer.state_dict()},
-                                  '%s/latest.ckpt' % (args.checkpoint_dir))
+                                   'Di': self.Di.state_dict(),
+                                   'Ds': self.Ds.state_dict(),
+                                   'Gis': self.Gis.state_dict(),
+                                   'Gsi': self.Gsi.state_dict(),
+                                   'di_optimizer': self.di_optimizer.state_dict(),
+                                   'ds_optimizer': self.ds_optimizer.state_dict(),
+                                   'gis_optimizer': self.gis_optimizer.state_dict(),
+                                   'gsi_optimizer': self.gsi_optimizer.state_dict()},
+                                  '%s/latest_semisuper_cycleGAN.ckpt' % (args.checkpoint_dir))

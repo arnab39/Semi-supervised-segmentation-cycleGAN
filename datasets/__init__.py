@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import random
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance
+from .dataloader import VOCDataset
 
 
 def colormap(n):
