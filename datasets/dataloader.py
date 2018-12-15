@@ -5,6 +5,7 @@ from torchvision import transforms
 
 from . import get_transformation
 from utils import recursive_glob
+from utilities.cityscapes_helper import labels as cityscapes_labels
 
 from PIL import Image
 import torch
@@ -80,55 +81,65 @@ class VOCDataset(Dataset):
 
 
 class CityscapesDataset(Dataset):
-    split_ratio = [0.85, 0.15]
-    '''
-    this split ratio is for the train (including the labeled and unlabeled) and the val dataset
-    '''
+    """
+    Dataloader for Cityscapes dataset (https://www.cityscapes-dataset.com).
+    The data packages gtFine_trainvaltest and leftImg8bit_trainvaltest can be downloaded from:
+    https://www.cityscapes-dataset.com/downloads/
 
-    @classmethod
-    def reset_split_ratio(cls, new_ratio):
-        assert new_ratio.__len__() == 2, "should input 2 float numbers indicating percentage for train and test dataset"
-        assert np.array(new_ratio).sum() == 1, 'New split ratio should be normalized, given %s' % str(new_ratio)
-        assert np.array(new_ratio).min() > 0 and np.array(new_ratio).max() < 1
-        cls.split_ratio = new_ratio
+    """
+
+    # Images name subfolder in the Cityspaces root folder
+    imgs_subfolder = 'leftImg8bit'
+
+    # Annotation name subfolder in the Cityspaces root folder
+    gts_subfolder = 'gtFine'
+
+    # Number of classes in the Cityspaces dataset
+    n_classes = 19
+
+    # Train labels which are used to map the labels
+    # in the annotation images into train labels
+    # Some variables in the annotatio are ignore for example
+    # See utils.cityscapes for more details
+    ordered_train_labels = np.asarray(list(map(lambda x: x.trainId, cityscapes_labels)))
+
+    # Names of the folders containing train/val/test splits
+    dataset_types = ['train', 'val', 'test']
 
     def __init__(self, root_path, name='label', transformation=None, augmentation=None):
         super(CityscapesDataset, self).__init__()
 
         self.root_path = root_path
         self.name = name
-        self.n_classes = 19
+
         assert transformation is not None, 'transformation must be provided, give None'
         self.transformation = transformation
         self.augmentation = augmentation
-        assert name in ('label', 'unlab',
-                        'val'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % name
+        assert name in self.dataset_types, 'dataset name should be restricted in "train", "val" and "test", given %s' % name
 
-        self.images_base = os.path.join(self.root_path, "leftImg8bit", self.name)
-        self.annotations_base = os.path.join(
-            self.root_path, "gtFine", self.name
-        )
+        self.images_base = os.path.join(self.root_path, self.__class__.imgs_subfolder, self.name)
+        self.annotations_base = os.path.join(self.root_path, self.__class__.gts_subfolder, self.name)
 
-        np.random.seed(1)
-        self.imgs = recursive_glob(rootdir=self.images_base, suffix=".png")
-        np.random.shuffle(self.imgs)
+        self.imgs, self.gts = [], []
+        self.imgs = recursive_glob(rootdir=self.images_base, suffix='.png')
+        self.gts = [path.replace('_leftImg8bit', '_gtFine_labelIds').replace('/leftImg8bit', '/gtFine') for path in self.imgs]
 
-        self.gts = self.imgs
+        # randomizing the image and ground-truth lists
+        samples = list(zip(self.imgs, self.gts))
+        np.random.shuffle(samples)
+        self.imgs, self.gts = zip(*samples)
 
     def __getitem__(self, index):
         """__getitem__
                 :param index:
                 """
-        img_path = self.files[self.name][index].rstrip()
-        gt_path = os.path.join(
-            self.root_path,
-            'gtFine',
-            img_path.split(os.sep)[-2],
-            os.path.basename(img_path)[:-15] + 'gtFine_labelIds.png',
-        )
+        img_path = self.imgs[index]
+        gt_path = self.gts[index]
 
         img = Image.open(img_path).convert('RGB')
-        gt = Image.open(gt_path).convert('P')
+        gt_np = np.asarray(Image.open(gt_path))
+        gt_np = self.__class__.ordered_train_labels[gt_np].astype(np.uint8)
+        gt = Image.fromarray(gt_np)
 
         if self.augmentation is not None:
             img, gt = self.augmentation(img, gt)
