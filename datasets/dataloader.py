@@ -8,6 +8,7 @@ from utils import recursive_glob
 from utilities.cityscapes_helper import labels as cityscapes_labels
 
 from PIL import Image
+import torch
 
 
 class VOCDataset(Dataset):
@@ -37,7 +38,7 @@ class VOCDataset(Dataset):
         assert transformation is not None, 'transformation must be provided, give None'
         self.transformation = transformation
         self.augmentation = augmentation
-        assert name in ('label', 'unlab',
+        assert name in ('label', 'unlabel',
                         'val'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % name
         assert 0 <= ratio <= 1, 'the ratio between "labeled" and "unlabeled" should be between 0 and 1, given %.1f' % ratio
         np.random.seed(1)
@@ -53,8 +54,10 @@ class VOCDataset(Dataset):
             self.imgs = labeled_imgs
         elif self.name == "unlabel":
             self.imgs = unlabeled_imgs
-        else:
+        elif self.name == 'val':
             self.imgs = val_imgs
+        else:
+            raise ('{} not defined'.format(self.name))
         self.gts = self.imgs
 
     def __getitem__(self, index):
@@ -65,7 +68,7 @@ class VOCDataset(Dataset):
         gt = Image.open(gt_path).convert('P')
 
         if self.augmentation is not None:
-            img,gt = self.augmentation(img, gt)
+            img, gt = self.augmentation(img, gt)
 
         if self.transformation:
             img = self.transformation['img'](img)
@@ -149,4 +152,5 @@ class CityscapesDataset(Dataset):
 
     def __len__(self):
         return len(self.imgs)
+
 
