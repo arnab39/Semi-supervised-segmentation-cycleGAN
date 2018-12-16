@@ -67,18 +67,21 @@ class cycleGAN(object):
         labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform, augmentation=None)
         unlabeled_set = VOCDataset(root_path=root, name='unlabel', ratio=0.5, transformation=transform,
                                    augmentation=None)
+        val_set = VOCDataset(root_path=root, name='val', ratio=0.5, transformation=transform,
+                             augmentation=None)
 
-        ##
         assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
 
         labeled_loader_CE = DataLoader(labeled_set, batch_size=1, shuffle=True)
         labeled_loader = DataLoader(labeled_set, batch_size=1, shuffle=True)
         unlabeled_loader = DataLoader(unlabeled_set, batch_size=1, shuffle=True)
+        val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
 
         img_fake_sample = utils.Sample_from_Pool()
         gt_fake_sample = utils.Sample_from_Pool()
 
         for epoch in range(self.start_epoch, args.epochs):
+
             for i, ((_, real_gt, _), (real_img, _, _), (l_img, l_gt, _)) in enumerate(
                     zip(labeled_loader, unlabeled_loader, labeled_loader_CE)):
                 # step
@@ -117,7 +120,7 @@ class cycleGAN(object):
 
                 # Cycle consistency losses
                 img_cycle_loss = self.L1(recon_img, real_img)
-                gt_cycle_loss = self.L1(recon_gt, make_one_hot(real_gt, dataname ))
+                gt_cycle_loss = self.L1(recon_gt, make_one_hot(real_gt, dataname))
 
                 # Total generators losses
                 gen_loss = a_gen_loss + b_gen_loss + img_cycle_loss * args.lamda + gt_cycle_loss * args.lamda
@@ -137,7 +140,7 @@ class cycleGAN(object):
                 # Forward pass through discriminators 
                 real_img_dis = self.Di(real_img)
                 fake_img_dis = self.Di(fake_img)
-                real_gt_dis = self.Ds(make_one_hot(real_gt, dataname ))
+                real_gt_dis = self.Ds(make_one_hot(real_gt, dataname))
                 fake_gt_dis = self.Ds(fake_gt)
                 real_label = utils.cuda(Variable(torch.ones(real_img_dis.size())))
                 fake_label = utils.cuda(Variable(torch.zeros(fake_img_dis.size())))
@@ -163,7 +166,7 @@ class cycleGAN(object):
                 # ================fully supervised training=================
                 l_img, l_gt = utils.cuda([l_img, l_gt])
                 fake_gt = self.Gsi(l_img)
-                fake_img = self.Gis(make_one_hot(l_gt, dataname ))
+                fake_img = self.Gis(make_one_hot(l_gt, dataname))
                 fullsupervisedloss = self.CE(fake_gt, l_gt.squeeze(1)) + self.MSE(fake_img, l_img)
                 ## here the categorical loss should be set as CE.
                 self.Gis.zero_grad()
@@ -176,8 +179,9 @@ class cycleGAN(object):
                       (epoch, i + 1, min(len(labeled_loader), len(unlabeled_loader)),
                        gen_loss, img_dis_loss + gt_dis_loss, fullsupervisedloss.item()))
 
+            miou = utils.val(self.Gis, val_loader, nclass=21, nogpu=False)
             # Override the latest checkpoint 
-            utils.save_checkpoint({'epoch': epoch + 1,
+            utils.save_checkpoint({'miou': miou, 'epoch': epoch + 1,
                                    'Di': self.Di.state_dict(),
                                    'Ds': self.Ds.state_dict(),
                                    'Gis': self.Gis.state_dict(),
