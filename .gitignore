@@ -1,7 +1,12 @@
 *.iml
 *.xml
 *.DS_Store
+# datasets
 datasets/VOC2012/*
+datasets/horse2zebra/*
+datasets/Cityscapes/*
+datasets/VOC2012/*
+datasets/Cityspaces/*
 arch/__pycache__/
 arch/__pycache__/*
 datasets/horse2zebra/*
