@@ -8,8 +8,8 @@ import torchvision.datasets as dsets
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import utils
-from arch import Generator, Discriminator
-from datasets import PILaugment, VOCDataset, get_transformation
+from arch import define_Gen, define_Dis
+from datasets import VOCDataset, get_transformation
 from utils import make_one_hot
 
 '''
@@ -21,13 +21,12 @@ root = '/home/AP84830/Semi-supervised-cycleGAN/datasets/VOC2012'
 class supervised_model(object):
     def __init__(self, args):
 
-        utils.cuda_devices([args.gpu_id])
+        utils.cuda_devices(args.gpu_ids)
 
         # Define the network 
-        self.Gsi = Generator(in_dim=3, out_dim=22)  # for image to segmentation
+        self.Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='unet_256', norm=args.norm,
+                                                 use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)  # for image to segmentation
         self.CE = nn.CrossEntropyLoss()
-
-        utils.cuda([self.Gsi])
         self.gsi_optimizer = torch.optim.Adam(self.Gsi.parameters(), lr=args.lr, betas=(0.9, 0.999))
 
         if not os.path.isdir(args.checkpoint_dir):
@@ -48,18 +47,17 @@ class supervised_model(object):
         ## let the choice of dataset configurable
         labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform, augmentation=None)
 
-        labeled_loader= DataLoader(labeled_set, batch_size=1, shuffle=True)
+        labeled_loader= DataLoader(labeled_set, batch_size=args.batch_size, shuffle=True)
 
         img_fake_sample = utils.Sample_from_Pool()
         gt_fake_sample = utils.Sample_from_Pool()
 
         for epoch in range(self.start_epoch, args.epochs):
-            for i, ((l_img, l_gt, _)) in enumerate(zip(labeled_loader)):
+            for i, (l_img, l_gt, _) in enumerate(labeled_loader):
                 # step
                 step = epoch * len(labeled_loader) + i + 1
-                print(l_gt.max())
+
                 # set train
-                self.Gis.train()
                 self.Gsi.train()
 
                 l_img, l_gt = utils.cuda([l_img, l_gt])
@@ -75,8 +73,7 @@ class supervised_model(object):
 
 
                 print("Epoch: (%3d) (%5d/%5d) | Crossentropy Loss:%.2e" %
-                      (epoch, i + 1, min(len(labeled_loader), len(unlabeled_loader)),
-                       gen_loss, img_dis_loss + gt_dis_loss, fullsupervisedloss.item()))
+                      (epoch, i + 1, len(labeled_loader), fullsupervisedloss.item()))
 
             # Override the latest checkpoint 
             utils.save_checkpoint({'epoch': epoch + 1,
@@ -88,19 +85,23 @@ class supervised_model(object):
 class semisuper_cycleGAN(object):
     def __init__(self, args):
 
-        utils.cuda_devices([args.gpu_id])
+        utils.cuda_devices(args.gpu_ids)
 
         # Define the network 
-        self.Di = Discriminator(in_dim=3)
-        self.Ds = Discriminator(in_dim=22)  # for voc 2012, there are 22 classes
-        self.Gis = Generator(in_dim=22, out_dim=3)  # for segmentaion to image
-        self.Gsi = Generator(in_dim=3, out_dim=22)  # for image to segmentation
+        # for segmentaion to image
+        self.Gis = define_Gen(input_nc=22, output_nc=3, ngf=args.ngf, netG='resnet_9blocks', 
+                        norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)
+        # for image to segmentation
+        self.Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='unet_256', 
+                        norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids) 
+        self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD= 'n_layers', n_layers_D=3,
+                                                     norm=args.norm, gpu_ids=args.gpu_ids)
+        self.Ds = define_Dis(input_nc=22, ndf=args.ndf, netD= 'n_layers', n_layers_D=3,
+                                                     norm=args.norm, gpu_ids=args.gpu_ids)  # for voc 2012, there are 22 classes 
 
         self.MSE = nn.MSELoss()
         self.L1 = nn.L1Loss()
         self.CE = nn.CrossEntropyLoss()
-
-        utils.cuda([self.Di, self.Ds, self.Gis, self.Gsi])
 
         self.di_optimizer = torch.optim.Adam(self.Di.parameters(), lr=args.lr, betas=(0.5, 0.999))
         self.ds_optimizer = torch.optim.Adam(self.Ds.parameters(), lr=args.lr, betas=(0.5, 0.999))
@@ -111,7 +112,7 @@ class semisuper_cycleGAN(object):
             os.makedirs(args.checkpoint_dir)
 
         try:
-            ckpt = utils.load_checkpoint('%s/latest.ckpt' % (args.checkpoint_dir))
+            ckpt = utils.load_checkpoint('%s/latest_semisuper_cycleGAN.ckpt' % (args.checkpoint_dir))
             self.start_epoch = ckpt['epoch']
             self.Di.load_state_dict(ckpt['Di'])
             self.Ds.load_state_dict(ckpt['Ds'])
@@ -136,8 +137,8 @@ class semisuper_cycleGAN(object):
         ##
         assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
 
-        labeled_loader = DataLoader(labeled_set, batch_size=1, shuffle=True)
-        unlabeled_loader = DataLoader(unlabeled_set, batch_size=1, shuffle=True)
+        labeled_loader = DataLoader(labeled_set, batch_size=args.batch_size, shuffle=True)
+        unlabeled_loader = DataLoader(unlabeled_set, batch_size=args.batch_size, shuffle=True)
 
         img_fake_sample = utils.Sample_from_Pool()
         gt_fake_sample = utils.Sample_from_Pool()
