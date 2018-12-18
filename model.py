@@ -133,18 +133,28 @@ class semisuper_cycleGAN(object):
         labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform, augmentation=None)
         unlabeled_set = VOCDataset(root_path=root, name='unlabel', ratio=0.5, transformation=transform,
                                    augmentation=None)
+        val_set = VOCDataset(root_path=root, name='val', ratio=0.5, transformation=transform,
+                             augmentation=None)
 
-        ##
         assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
 
+<<<<<<< HEAD
         labeled_loader = DataLoader(labeled_set, batch_size=args.batch_size, shuffle=True)
         unlabeled_loader = DataLoader(unlabeled_set, batch_size=args.batch_size, shuffle=True)
+=======
+        labeled_loader = DataLoader(labeled_set, batch_size=1, shuffle=True)
+        unlabeled_loader = DataLoader(unlabeled_set, batch_size=1, shuffle=True)
+        val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
+>>>>>>> 583527dccb3cb608bbe24846e4e117ed831138ce
 
         img_fake_sample = utils.Sample_from_Pool()
         gt_fake_sample = utils.Sample_from_Pool()
 
         for epoch in range(self.start_epoch, args.epochs):
+
+
             for i, ((l_img, l_gt, _),(unl_img, _, _)) in enumerate(zip(labeled_loader, unlabeled_loader)):
+
 
                 # step
                 step = epoch * min(len(labeled_loader), len(unlabeled_loader)) + i + 1
@@ -184,8 +194,11 @@ class semisuper_cycleGAN(object):
                 gt_gen_loss = self.MSE(fake_gt_dis, real_label)
 
                 # Cycle consistency losses
+
+
                 img_cycle_loss = self.L1(recon_img, unl_img)
                 gt_cycle_loss = self.L1(recon_gt, make_one_hot(l_gt, args.dataset ))
+
 
                 # Total generators losses
                 fullsupervisedloss = self.CE(lab_gt, l_gt.squeeze(1)) + self.MSE(fake_img, l_img)
@@ -210,7 +223,9 @@ class semisuper_cycleGAN(object):
                 # Forward pass through discriminators 
                 unl_img_dis = self.Di(unl_img)
                 fake_img_dis = self.Di(fake_img)
+
                 real_gt_dis = self.Ds(make_one_hot(l_gt, args.dataset ))
+
                 fake_gt_dis = self.Ds(fake_gt)
                 real_label = utils.cuda(Variable(torch.ones(unl_img_dis.size())))
                 fake_label = utils.cuda(Variable(torch.zeros(fake_img_dis.size())))
@@ -233,11 +248,14 @@ class semisuper_cycleGAN(object):
                 self.di_optimizer.step()
                 self.ds_optimizer.step()
 
-                print("Epoch: (%3d) (%5d/%5d) | Dis Loss:%.2e | Unlab Gen Loss:%.2e | Lab Gen loss:%.2e" %
+
+            miou = utils.val(self.Gis, val_loader, nclass=21, nogpu=False)
+
+            print("Epoch: (%3d) (%5d/%5d) | Dis Loss:%.2e | Unlab Gen Loss:%.2e | Lab Gen loss:%.2e" %
                       (epoch, i + 1, min(len(labeled_loader), len(unlabeled_loader)),
                        img_dis_loss+gt_dis_loss, unsupervisedloss, fullsupervisedloss))
             # Override the latest checkpoint 
-            utils.save_checkpoint({'epoch': epoch + 1,
+            utils.save_checkpoint({'miou': miou, 'epoch': epoch + 1,
                                    'Di': self.Di.state_dict(),
                                    'Ds': self.Ds.state_dict(),
                                    'Gis': self.Gis.state_dict(),
