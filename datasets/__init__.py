@@ -2,8 +2,9 @@ from torchvision.transforms import *
 import numpy as np
 import torch
 import random
-from PIL import Image, ImageOps, ImageFilter, ImageEnhance
+from PIL import ImageOps, ImageFilter, ImageEnhance
 from .dataloader import VOCDataset
+from .cityscapes_dataloader import CityscapesDatasetRefactored as CityscapesDataset
 
 
 def colormap(n):
@@ -104,12 +105,21 @@ def PILaugment(img, mask):
     return img, mask
 
 
-def get_transformation(size):
-    input_transform = Compose([
+def get_transformation(size, resize=False):
+    transfom_lst = [
         CenterCrop(size),
         ToTensor(),
         Normalize([.485, .456, .406], [.229, .224, .225]),
-    ])
+    ]
+    if resize:
+        transfom_lst = [
+            Resize(size),
+            CenterCrop(size),
+            ToTensor(),
+            Normalize([.485, .456, .406], [.229, .224, .225]),
+        ]
+    input_transform = Compose(transfom_lst)
+
     target_transform = Compose([
         CenterCrop(size),
         ToLabel(),

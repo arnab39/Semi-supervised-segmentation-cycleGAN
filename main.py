@@ -21,7 +21,7 @@ def get_args():
     parser.add_argument('--model', type=str, default='supervised_model')
     parser.add_argument('--results_dir', type=str, default='./results')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/horse2zebra')
-    parser.add_argument('--dataset',type=str,choices=['voc2012'],default='voc2012')
+    parser.add_argument('--dataset',type=str,choices=['voc2012', 'cityscapes'],default='voc2012')
     parser.add_argument('--norm', type=str, default='instance', help='instance normalization or batch normalization')
     parser.add_argument('--no_dropout', action='store_true', help='no dropout for the generator')
     parser.add_argument('--ngf', type=int, default=64, help='# of gen filters in first conv layer')
