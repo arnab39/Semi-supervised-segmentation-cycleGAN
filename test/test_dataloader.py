@@ -1,6 +1,8 @@
-from datasets.dataloader import VOCDataset, CityscapesDataset
+from datasets.dataloader import VOCDataset
+from datasets.cityscapes_dataloader import CityscapesDatasetRefactored
 from datasets import get_transformation, PILaugment
-from torchvision.transforms import ToPILImage
+from datasets.augmentations import *
+from torchvision.transforms import ToPILImage, Compose, ToTensor
 from utils import make_one_hot
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
@@ -20,11 +22,12 @@ def test_vocdataset():
     assert voc[0][0].shape[2] == img_size
     target = voc[0][1]
 
+
 def test_cityscapes():
     root = '../datasets/Cityspaces'
     img_size = 256
     transform = get_transformation(img_size)
-    cityscape = CityscapesDataset(root_path=root, name='train', transformation=transform, augmentation=None)
+    cityscape = CityscapesDatasetRefactored(root_path=root, name='train', transformation=transform, augmentation=None)
 
     # validate the length of images and ground-truth
     assert len(cityscape.imgs) == len(cityscape.gts)
@@ -81,5 +84,70 @@ def test_onehot():
     pass
 
 
+def testing_transformations():
+    root = '../datasets/Cityspaces'
+    img_size = 256
+    transform = get_transformation(img_size)
+    input_transform = Compose([ToTensor()])
+    target_transform = Compose([ToTensor()])
+    transform_ = {'img': input_transform, 'gt': target_transform}
+
+    cityscape = CityscapesDatasetRefactored(root_path=root, name='train', transformation=transform_, augmentation=None)
+
+    # validate the length of images and ground-truth
+    assert len(cityscape.imgs) == len(cityscape.gts)
+
+    fig = plt.figure()
+
+    for i in range(len(cityscape)):
+        imgs, gts, path = cityscape[i]
+        print(path)
+        print(i, imgs.shape, type(imgs), gts.squeeze(0).shape)
+        npimgs = np.transpose(imgs.numpy(), (1, 2, 0))
+        npgts = gts.squeeze(0).numpy()
+        print(i, npimgs.shape, type(npgts), npgts.shape)
+
+        ax = fig.add_subplot(1, 4, i + 1)
+        imgplot = plt.imshow(npimgs, interpolation='nearest')
+        plt.tight_layout()
+        ax.set_title('Image #{}'.format(i))
+        ax.axis('off')
+
+        ax = fig.add_subplot(2, 4, i + 1)
+        imgplot = plt.imshow(npgts, interpolation='nearest')
+        plt.tight_layout()
+        ax.set_title('GT #{}'.format(i))
+        ax.axis('off')
+
+        if i == 3:
+            plt.show()
+            break
+
+
+def testing__refactored_cityscapes():
+    import matplotlib.pyplot as plt
+
+    augmentations = Compose([Scale(2048), RandomRotate(10)])
+    local_path = "../datasets/Cityspaces"
+    dst = CityscapesDatasetRefactored(local_path, is_transform=True, img_size=(512, 1024), augmentations=augmentations)
+    bs = 4
+    trainloader = DataLoader(dst, batch_size=bs, num_workers=0)
+    for i, data in enumerate(trainloader):
+        imgs, labels = data
+        imgs = imgs.numpy()[:, ::-1, :, :]
+        imgs = np.transpose(imgs, [0, 2, 3, 1])
+        f, axarr = plt.subplots(bs, 2)
+        for j in range(bs):
+            axarr[j][0].imshow(imgs[j])
+            axarr[j][1].imshow(dst.decode_segmap(labels.numpy()[j]))
+        plt.show()
+        a = input()
+        if a == "ex":
+            break
+        else:
+            plt.close()
+
+
 if __name__ == '__main__':
-    test_onehot()
+    testing__refactored_cityscapes()
+    print()
