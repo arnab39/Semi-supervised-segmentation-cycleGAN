@@ -1,14 +1,11 @@
-import os, pandas as pd
+import os
+import pandas as pd
 import numpy as np
-from torch.utils.data import Dataset
-from torchvision import transforms
 
-from . import get_transformation
+from torch.utils.data import Dataset
 from utils import recursive_glob
 from utilities.cityscapes_helper import labels as cityscapes_labels
-
 from PIL import Image
-import torch
 
 
 class VOCDataset(Dataset):
@@ -112,7 +109,7 @@ class CityscapesDataset(Dataset):
         self.root_path = root_path
         self.name = name
 
-        assert transformation is not None, 'transformation must be provided, give None'
+        # assert transformation is not None, 'transformation must be provided, give None'
         self.transformation = transformation
         self.augmentation = augmentation
         assert name in self.dataset_types, 'dataset name should be restricted in "train", "val" and "test", given %s' % name
@@ -152,5 +149,4 @@ class CityscapesDataset(Dataset):
 
     def __len__(self):
         return len(self.imgs)
-
 

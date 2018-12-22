@@ -9,7 +9,6 @@ import torchvision.transforms as transforms
 import utils
 
 
-
 def test(args):
     utils.cuda_devices([args.gpu_id])
     transform = transforms.Compose(
