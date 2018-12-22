@@ -3,7 +3,7 @@ import numpy as np
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-from . import get_transformation
+from .dataloader_utils import get_transformation
 from utils import recursive_glob
 from utilities.cityscapes_helper import labels as cityscapes_labels
 

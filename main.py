@@ -40,7 +40,6 @@ def main():
     id = int(str_id)
     if id >= 0:
       args.gpu_ids.append(id)
-  print(args.no_dropout)
 
   if args.training:
     if args.model == "semisupervised_cycleGAN":

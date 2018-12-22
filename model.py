@@ -24,7 +24,7 @@ class supervised_model(object):
         utils.cuda_devices(args.gpu_ids)
 
         # Define the network 
-        self.Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='unet_256', norm=args.norm,
+        self.Gsi = define_Gen(input_nc=3, output_nc=21, ngf=args.ngf, netG='unet_256', norm=args.norm,
                                                  use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)  # for image to segmentation
         self.CE = nn.CrossEntropyLoss()
         self.gsi_optimizer = torch.optim.Adam(self.Gsi.parameters(), lr=args.lr, betas=(0.9, 0.999))
@@ -89,10 +89,10 @@ class semisuper_cycleGAN(object):
 
         # Define the network 
         # for segmentaion to image
-        self.Gis = define_Gen(input_nc=22, output_nc=3, ngf=args.ngf, netG='resnet_9blocks', 
+        self.Gis = define_Gen(input_nc=21, output_nc=3, ngf=args.ngf, netG='resnet_9blocks', 
                         norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)
         # for image to segmentation
-        self.Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='unet_256', 
+        self.Gsi = define_Gen(input_nc=3, output_nc=21, ngf=args.ngf, netG='unet_256', 
                         norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids) 
         self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD= 'n_layers', n_layers_D=3,
                                                      norm=args.norm, gpu_ids=args.gpu_ids)
@@ -138,14 +138,10 @@ class semisuper_cycleGAN(object):
 
         assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
 
-<<<<<<< HEAD
+
         labeled_loader = DataLoader(labeled_set, batch_size=args.batch_size, shuffle=True)
         unlabeled_loader = DataLoader(unlabeled_set, batch_size=args.batch_size, shuffle=True)
-=======
-        labeled_loader = DataLoader(labeled_set, batch_size=1, shuffle=True)
-        unlabeled_loader = DataLoader(unlabeled_set, batch_size=1, shuffle=True)
-        val_loader = DataLoader(val_set, batch_size=1, shuffle=False)
->>>>>>> 583527dccb3cb608bbe24846e4e117ed831138ce
+        val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False)
 
         img_fake_sample = utils.Sample_from_Pool()
         gt_fake_sample = utils.Sample_from_Pool()
