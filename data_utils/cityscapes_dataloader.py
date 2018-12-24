@@ -1,7 +1,7 @@
 import os
 import torch
 import scipy.misc as m
-
+import numpy as np
 from torch.utils.data import Dataset
 from utils import recursive_glob
 from datasets.augmentations import *

@@ -69,9 +69,9 @@ def test_onehot():
     onehot_gt = make_one_hot(gt, 'voc2012')
 
     # visulization for the first one image
-    plt.imshow(img[0].squeeze()[0].numpy());
+    plt.imshow(img[0].squeeze()[0].numpy())
     plt.show()
-    plt.imshow(gt[0].squeeze().numpy());
+    plt.imshow(gt[0].squeeze().numpy())
     plt.show()
 
     onehot_gt = onehot_gt[0]

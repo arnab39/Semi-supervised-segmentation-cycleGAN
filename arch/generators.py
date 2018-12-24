@@ -62,8 +62,6 @@ class UnetGenerator(nn.Module):
     def forward(self, input):
         return self.unet_model(input)
 
-
-
 class ResnetGenerator(nn.Module):
     def __init__(self, input_nc=3, output_nc=3, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=True, num_blocks=6):
         super(ResnetGenerator, self).__init__()
@@ -89,9 +87,6 @@ class ResnetGenerator(nn.Module):
 
     def forward(self, x):
         return self.res_model(x)
-
-
-
 
 def define_Gen(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, gpu_ids=[0]):
     gen_net = None
