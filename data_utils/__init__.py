@@ -3,8 +3,7 @@ import numpy as np
 import torch
 import random
 from PIL import ImageOps, ImageFilter, ImageEnhance
-from .dataloader import VOCDataset
-from .cityscapes_dataloader import CityscapesDatasetRefactored as CityscapesDataset
+from .dataloader import VOCDataset, CityscapesDataset
 
 
 def colormap(n):
