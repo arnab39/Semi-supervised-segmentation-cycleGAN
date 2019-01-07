@@ -9,7 +9,8 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import utils
 from arch import define_Gen, define_Dis
-from datasets import VOCDataset, CityscapesDataset, get_transformation
+# from datasets import VOCDataset, CityscapesDataset, get_transformation
+from data_utils import VOCDataset, CityscapesDataset, get_transformation
 from utils import make_one_hot
 
 '''
@@ -27,7 +28,7 @@ class supervised_model(object):
 
         # Define the network 
         self.Gsi = define_Gen(input_nc=3, output_nc=21, ngf=args.ngf, netG='unet_256', norm=args.norm,
-                                                 use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)  # for image to segmentation
+                              use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)  # for image to segmentation
 
         self.CE = nn.CrossEntropyLoss()
         self.gsi_optimizer = torch.optim.Adam(self.Gsi.parameters(), lr=args.lr, betas=(0.9, 0.999))
@@ -56,7 +57,7 @@ class supervised_model(object):
             labeled_loader = DataLoader(labeled_set, batch_size=self.args.batch_size, shuffle=True)
         elif self.args.dataset == 'cityscapes':
             labeled_set = CityscapesDataset(root_path=root_cityscapes, split='train', is_transform=True,
-                                                      augmentation=None)
+                                            augmentation=None)
             labeled_loader = DataLoader(labeled_set, batch_size=self.args.batch_size, shuffle=True)
 
         img_fake_sample = utils.Sample_from_Pool()
@@ -99,15 +100,15 @@ class semisuper_cycleGAN(object):
         # Define the network 
         # for segmentaion to image
 
-        self.Gis = define_Gen(input_nc=21, output_nc=3, ngf=args.ngf, netG='resnet_9blocks', 
-                        norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)
+        self.Gis = define_Gen(input_nc=21, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
+                              norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
         # for image to segmentation
-        self.Gsi = define_Gen(input_nc=3, output_nc=21, ngf=args.ngf, netG='unet_256', 
-                        norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids) 
-        self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD= 'n_layers', n_layers_D=3,
-                                                     norm=args.norm, gpu_ids=args.gpu_ids)
-        self.Ds = define_Dis(input_nc=22, ndf=args.ndf, netD= 'n_layers', n_layers_D=3,
-                                                     norm=args.norm, gpu_ids=args.gpu_ids)  # for voc 2012, there are 22 classes 
+        self.Gsi = define_Gen(input_nc=3, output_nc=21, ngf=args.ngf, netG='unet_256',
+                              norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
+        self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD='n_layers', n_layers_D=3,
+                             norm=args.norm, gpu_ids=args.gpu_ids)
+        self.Ds = define_Dis(input_nc=22, ndf=args.ndf, netD='n_layers', n_layers_D=3,
+                             norm=args.norm, gpu_ids=args.gpu_ids)  # for voc 2012, there are 22 classes
 
         self.args = args
 
@@ -151,18 +152,17 @@ class semisuper_cycleGAN(object):
                                  augmentation=None)
         elif self.args.dataset == 'cityscapes':
             labeled_set = CityscapesDataset(root_path=root_cityscapes, split='train', is_transform=True,
-                                                      augmentation=None)
+                                            augmentation=None)
             unlabeled_set = CityscapesDataset(root_path=root_cityscapes, split='val', is_transform=True,
-                                                        augmentation=None)
+                                              augmentation=None)
             val_set = CityscapesDataset(root_path=root_cityscapes, split='test', is_transform=True,
-                                                  augmentation=None)
+                                        augmentation=None)
 
         assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
 
         labeled_loader = DataLoader(labeled_set, batch_size=args.batch_size, shuffle=True)
         unlabeled_loader = DataLoader(unlabeled_set, batch_size=args.batch_size, shuffle=True)
         val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False)
-
 
         img_fake_sample = utils.Sample_from_Pool()
         gt_fake_sample = utils.Sample_from_Pool()

@@ -1,11 +1,13 @@
 import os
 import pandas as pd
 import numpy as np
+import torch
+import scipy.misc as m
 
 from torch.utils.data import Dataset
 from utils import recursive_glob
-from utilities.cityscapes_helper import labels as cityscapes_labels
 from PIL import Image
+from .augmentations import *
 
 
 class VOCDataset(Dataset):
@@ -78,75 +80,201 @@ class VOCDataset(Dataset):
 
 
 class CityscapesDataset(Dataset):
-    """
-    Dataloader for Cityscapes dataset (https://www.cityscapes-dataset.com).
-    The data packages gtFine_trainvaltest and leftImg8bit_trainvaltest can be downloaded from:
+    """cityscapesLoader
+    https://www.cityscapes-dataset.com
+    Data is derived from CityScapes, and can be downloaded from here:
     https://www.cityscapes-dataset.com/downloads/
-
+    Many Thanks to @fvisin for the loader repo:
+    https://github.com/fvisin/dataset_loaders/blob/master/dataset_loaders/images/cityscapes.py
     """
 
-    # Images name subfolder in the Cityspaces root folder
-    imgs_subfolder = 'leftImg8bit'
+    colors = [  # [  0,   0,   0],
+        [128, 64, 128],
+        [244, 35, 232],
+        [70, 70, 70],
+        [102, 102, 156],
+        [190, 153, 153],
+        [153, 153, 153],
+        [250, 170, 30],
+        [220, 220, 0],
+        [107, 142, 35],
+        [152, 251, 152],
+        [0, 130, 180],
+        [220, 20, 60],
+        [255, 0, 0],
+        [0, 0, 142],
+        [0, 0, 70],
+        [0, 60, 100],
+        [0, 80, 100],
+        [0, 0, 230],
+        [119, 11, 32],
+    ]
 
-    # Annotation name subfolder in the Cityspaces root folder
-    gts_subfolder = 'gtFine'
+    label_colours = dict(zip(range(19), colors))
 
-    # Number of classes in the Cityspaces dataset
-    n_classes = 19
+    mean_rgb = {
+        "pascal": [103.939, 116.779, 123.68],
+        "cityscapes": [0.0, 0.0, 0.0],
+    }  # pascal mean for PSPNet and ICNet pre-trained model
 
-    # Train labels which are used to map the labels
-    # in the annotation images into train labels
-    # Some variables in the annotatio are ignore for example
-    # See utils.cityscapes for more details
-    ordered_train_labels = np.asarray(list(map(lambda x: x.trainId, cityscapes_labels)))
+    def __init__(
+        self,
+        root_path,
+        split="train",
+        is_transform=False,
+        img_size=(512, 1024),
+        augmentation=None,
+        img_norm=True,
+        version="cityscapes",
+    ):
+        """__init__
+        :param root_path:
+        :param split:
+        :param is_transform:
+        :param img_size:
+        :param augmentations
+        """
+        self.root = root_path
+        self.split = split
+        self.is_transform = is_transform
+        self.augmentations = augmentation
+        self.img_norm = img_norm
+        self.n_classes = 19
+        self.img_size = (
+            img_size if isinstance(img_size, tuple) else (img_size, img_size)
+        )
+        self.mean = np.array(self.mean_rgb[version])
+        self.files = {}
 
-    # Names of the folders containing train/val/test splits
-    dataset_types = ['train', 'val', 'test']
+        assert split in ('train', 'test',
+                         'val'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % split
 
-    def __init__(self, root_path, name='label', transformation=None, augmentation=None):
-        super(CityscapesDataset, self).__init__()
+        self.images_base = os.path.join(self.root, "leftImg8bit", self.split)
+        self.annotations_base = os.path.join(
+            self.root, "gtFine", self.split
+        )
 
-        self.root_path = root_path
-        self.name = name
+        self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")
 
-        # assert transformation is not None, 'transformation must be provided, give None'
-        self.transformation = transformation
-        self.augmentation = augmentation
-        assert name in self.dataset_types, 'dataset name should be restricted in "train", "val" and "test", given %s' % name
+        self.void_classes = [0, 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 18, 29, 30, -1]
+        self.valid_classes = [7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33]
+        self.class_names = [
+            "unlabelled",
+            "road",
+            "sidewalk",
+            "building",
+            "wall",
+            "fence",
+            "pole",
+            "traffic_light",
+            "traffic_sign",
+            "vegetation",
+            "terrain",
+            "sky",
+            "person",
+            "rider",
+            "car",
+            "truck",
+            "bus",
+            "train",
+            "motorcycle",
+            "bicycle",
+        ]
 
-        self.images_base = os.path.join(self.root_path, self.__class__.imgs_subfolder, self.name)
-        self.annotations_base = os.path.join(self.root_path, self.__class__.gts_subfolder, self.name)
+        self.ignore_index = 250
+        self.class_map = dict(zip(self.valid_classes, range(19)))
 
-        self.imgs, self.gts = [], []
-        self.imgs = recursive_glob(rootdir=self.images_base, suffix='.png')
-        self.gts = [path.replace('_leftImg8bit', '_gtFine_labelIds').replace('/leftImg8bit', '/gtFine') for path in self.imgs]
+        if not self.files[split]:
+            raise Exception(
+                "No files for split=[%s] found in %s" % (split, self.images_base)
+            )
 
-        # randomizing the image and ground-truth lists
-        samples = list(zip(self.imgs, self.gts))
-        np.random.shuffle(samples)
-        self.imgs, self.gts = zip(*samples)
+        print("Found %d %s images" % (len(self.files[split]), split))
+
+    def __len__(self):
+        """__len__"""
+        return len(self.files[self.split])
 
     def __getitem__(self, index):
         """__getitem__
-                :param index:
-                """
-        img_path = self.imgs[index]
-        gt_path = self.gts[index]
+        :param index:
+        """
+        img_path = self.files[self.split][index].rstrip()
+        lbl_path = os.path.join(
+            self.annotations_base,
+            img_path.split(os.sep)[-2],
+            os.path.basename(img_path)[:-15] + "gtFine_labelIds.png",
+        )
 
-        img = Image.open(img_path).convert('RGB')
-        gt_np = np.asarray(Image.open(gt_path))
-        gt_np = self.__class__.ordered_train_labels[gt_np].astype(np.uint8)
-        gt = Image.fromarray(gt_np)
+        img = m.imread(img_path)
+        img = np.array(img, dtype=np.uint8)
 
-        if self.augmentation is not None:
-            img, gt = self.augmentation(img, gt)
+        lbl = m.imread(lbl_path)
+        lbl = self.encode_segmap(np.array(lbl, dtype=np.uint8))
 
-        if self.transformation:
-            img = self.transformation['img'](img)
-            gt = self.transformation['gt'](gt)
+        if self.augmentations is not None:
+            img, lbl = self.augmentations(img, lbl)
 
-        return img, gt, self.imgs[index]
+        if self.is_transform:
+            img, lbl = self.transform(img, lbl)
 
-    def __len__(self):
-        return len(self.imgs)
+        return img, lbl
+
+    def transform(self, img, lbl):
+        """transform
+        :param img:
+        :param lbl:
+        """
+        img = m.imresize(
+            img, (self.img_size[0], self.img_size[1])
+        )  # uint8 with RGB mode
+        img = img[:, :, ::-1]  # RGB -> BGR
+        img = img.astype(np.float64)
+        img -= self.mean
+        if self.img_norm:
+            # Resize scales images from 0 to 255, thus we need
+            # to divide by 255.0
+            img = img.astype(float) / 255.0
+        # NHWC -> NCHW
+        img = img.transpose(2, 0, 1)
+
+        classes = np.unique(lbl)
+        lbl = lbl.astype(float)
+        lbl = m.imresize(lbl, (self.img_size[0], self.img_size[1]), "nearest", mode="F")
+        lbl = lbl.astype(int)
+
+        if not np.all(classes == np.unique(lbl)):
+            print("WARN: resizing labels yielded fewer classes")
+
+        if not np.all(np.unique(lbl[lbl != self.ignore_index]) < self.n_classes):
+            print("after det", classes, np.unique(lbl))
+            raise ValueError("Segmentation map contained invalid class values")
+
+        img = torch.from_numpy(img).float()
+        lbl = torch.from_numpy(lbl).long()
+
+        return img, lbl
+
+    def decode_segmap(self, temp):
+        r = temp.copy()
+        g = temp.copy()
+        b = temp.copy()
+        for l in range(0, self.n_classes):
+            r[temp == l] = self.label_colours[l][0]
+            g[temp == l] = self.label_colours[l][1]
+            b[temp == l] = self.label_colours[l][2]
+
+        rgb = np.zeros((temp.shape[0], temp.shape[1], 3))
+        rgb[:, :, 0] = r / 255.0
+        rgb[:, :, 1] = g / 255.0
+        rgb[:, :, 2] = b / 255.0
+        return rgb
+
+    def encode_segmap(self, mask):
+        # Put all void classes to zero
+        for _voidc in self.void_classes:
+            mask[mask == _voidc] = self.ignore_index
+        for _validc in self.valid_classes:
+            mask[mask == _validc] = self.class_map[_validc]
+        return mask
 
