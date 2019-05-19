@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import torch
 import scipy.misc as m
+import scipy.io as sio
 
 from torch.utils.data import Dataset
 from utils import recursive_glob
@@ -13,6 +14,16 @@ from .augmentations import *
 class VOCDataset(Dataset):
     '''
     We assume that there will be txt to note all the image names
+
+    
+    color map:
+    0=background, 1=aeroplane, 2=bicycle, 3=bird, 4=boat, 5=bottle # 6=bus, 7=car, 8=cat, 9=chair, 10=cow, 11=diningtable,
+    12=dog, 13=horse, 14=motorbike, 15=person # 16=potted plant, 17=sheep, 18=sofa, 19=train, 20=tv/monitor,
+    21=boundaries(self-defined)
+
+    Also it will return an image and ground truth as it is present in the image form, so ground truth won't 
+    be in one-hot form and rather would be a 2D tensor. To convert the labels in one-hot form in the training
+    code we will be calling the function 'make_one_hot' function of utils.py
 
     '''
 
@@ -33,30 +44,32 @@ class VOCDataset(Dataset):
         self.root_path = root_path
         self.ratio = ratio
         self.name = name
-        self.n_classes = 21
         assert transformation is not None, 'transformation must be provided, give None'
         self.transformation = transformation
         self.augmentation = augmentation
-        assert name in ('label', 'unlabel',
-                        'val'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % name
+        assert name in ('label', 'unlabel','val'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % name
         assert 0 <= ratio <= 1, 'the ratio between "labeled" and "unlabeled" should be between 0 and 1, given %.1f' % ratio
         np.random.seed(1)
-        total_imgs = pd.read_table(
-            os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainval.txt')).values.reshape(-1)
-        train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),
-                                      replace=False)
+
+        total_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainval.txt')).values.reshape(-1)
+        
+        train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
+        
         val_imgs = [x for x in total_imgs if x not in train_imgs]
+        
         labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
+        
         unlabeled_imgs = [x for x in train_imgs if x not in labeled_imgs]
 
         if self.name == 'label':
             self.imgs = labeled_imgs
-        elif self.name == "unlabel":
+        elif self.name == 'unlabel':
             self.imgs = unlabeled_imgs
         elif self.name == 'val':
             self.imgs = val_imgs
         else:
             raise ('{} not defined'.format(self.name))
+            
         self.gts = self.imgs
 
     def __getitem__(self, index):
@@ -64,7 +77,7 @@ class VOCDataset(Dataset):
         gt_path = os.path.join(self.root_path, 'SegmentationClass', self.gts[index] + '.png')
 
         img = Image.open(img_path).convert('RGB')
-        gt = Image.open(gt_path).convert('P')
+        gt = Image.open(gt_path) #.convert('P')
 
         if self.augmentation is not None:
             img, gt = self.augmentation(img, gt)

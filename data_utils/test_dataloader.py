@@ -43,9 +43,9 @@ def test_onehot():
     onehot_gt = make_one_hot(gt, 'voc2012')
 
     # visulization for the first one image
-    plt.imshow(img[0].squeeze()[0].numpy());
+    plt.imshow(img[0].squeeze()[0].numpy())
     plt.show()
-    plt.imshow(gt[0].squeeze().numpy());
+    plt.imshow(gt[0].squeeze().numpy())
     plt.show()
 
     onehot_gt = onehot_gt[0]
@@ -59,7 +59,7 @@ def test_onehot():
 
 
 def test_cityscapes():
-    img_size = (512, 1024)
+    img_size = (512, 1024)performing
     augmentations = Compose([Scale(2048), RandomRotate(10)])
     local_path = "../data/Cityspaces"
     cityscape = CityscapesDataset(local_path, is_transform=True, img_size=img_size, augmentation=augmentations)

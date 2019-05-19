@@ -1,4 +1,4 @@
-# Semi-supervised-cycleGAN
+
 
 ## Requirements
 - The code has been written in Python (3.5.2) and PyTorch (0.4.1)

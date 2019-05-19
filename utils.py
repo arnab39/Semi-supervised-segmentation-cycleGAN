@@ -4,6 +4,30 @@ import shutil
 
 import numpy as np
 import torch
+from PIL import Image
+
+
+'''
+The palette is used to convert the segmentation map having values from 0-21 back to paletted image
+'''
+palette = [0, 0, 0, 128, 0, 0, 0, 128, 0, 128, 128, 0, 0, 0, 128, 128, 0, 128, 0, 128, 128,
+           128, 128, 128, 64, 0, 0, 192, 0, 0, 64, 128, 0, 192, 128, 0, 64, 0, 128, 192, 0, 128,
+           64, 128, 128, 192, 128, 128, 0, 64, 0, 128, 64, 0, 0, 192, 0, 128, 192, 0, 0, 64, 128]
+
+zero_pad = 256 * 3 - len(palette)
+for i in range(zero_pad):
+    palette.append(0)
+
+
+def colorize_mask(mask):
+    '''
+    Used to convert the segmentation of one channel(mask) back to a paletted image
+    '''
+    # mask: numpy array of the mask
+    new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
+    new_mask.putpalette(palette)
+
+    return new_mask
 
 
 # To make directories
@@ -11,12 +35,6 @@ def mkdir(paths):
     for path in paths:
         if not os.path.isdir(path):
             os.makedirs(path)
-
-
-# To select GPU
-def cuda_devices(gpu_ids):
-    gpu_ids = [str(i) for i in gpu_ids]
-    os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(gpu_ids)
 
 
 # To make cuda tensor
@@ -281,3 +299,23 @@ def val(model, valoader, nclass=21, nogpu=False):
     model.train()
 
     return miou
+
+class LambdaLR():
+    def __init__(self, epochs, offset, decay_epoch):
+        self.epochs = epochs
+        self.offset = offset
+        self.decay_epoch = decay_epoch
+
+    def step(self, epoch):
+        return 1.0 - max(0, epoch + self.offset - self.decay_epoch)/(self.epochs - self.decay_epoch)
+
+def print_networks(nets, names):
+    print('------------Number of Parameters---------------')
+    i=0
+    for net in nets:
+        num_params = 0
+        for param in net.parameters():
+            num_params += param.numel()
+        print('[Network %s] Total number of parameters : %.3f M' % (names[i], num_params / 1e6))
+        i=i+1
+    print('-----------------------------------------------')

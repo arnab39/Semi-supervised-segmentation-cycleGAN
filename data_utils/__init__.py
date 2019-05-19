@@ -23,8 +23,16 @@ def colormap(n):
 
 
 class Relabel:
-
     def __init__(self, olabel, nlabel):
+        '''
+        Converts a particular label value in the tensor to another.
+        Used to convert the background color value to 21 in the case of voc dataset
+
+        Parameters
+        ----------
+        olabel : old label which needs to be changed
+        nlabel : new label which will replace the old label
+        '''
         self.olabel = olabel
         self.nlabel = nlabel
 
@@ -37,6 +45,9 @@ class Relabel:
 class ToLabel:
 
     def __call__(self, image):
+        '''
+        Used to change the image from dim(N x H x W) to dim(N x 1 x H x W)
+        '''
         return torch.from_numpy(np.array(image)).long().unsqueeze(0)
 
 
@@ -105,25 +116,41 @@ def PILaugment(img, mask):
 
 
 def get_transformation(size, resize=False):
-    transfom_lst = [
-        CenterCrop(size),
-        ToTensor(),
-        Normalize([.485, .456, .406], [.229, .224, .225]),
-    ]
+    '''
+    Used to return a transformation based on the size given, that is, returns an apt sized tensor
+    If resize = True then Resizing else CenterCrop
+    '''
     if resize:
         transfom_lst = [
             Resize(size),
             CenterCrop(size),
             ToTensor(),
-            Normalize([.485, .456, .406], [.229, .224, .225]),
+            Normalize([.485, .456, .406], [.229, .224, .225])
         ]
+    else:
+        transfom_lst = [
+            CenterCrop(size),
+            ToTensor(),
+            Normalize([.485, .456, .406], [.229, .224, .225])
+        ]
+    
     input_transform = Compose(transfom_lst)
 
-    target_transform = Compose([
-        CenterCrop(size),
-        ToLabel(),
-        Relabel(255, 21),
-    ])
+    if resize:
+        target_transform = Compose([
+            Resize(size),
+            CenterCrop(size),
+            ToLabel(),
+            Relabel(255, 21)    ## So as to replace the 255(boundaries) label as 21
+        ])
+
+    else:
+        target_transform = Compose([
+            CenterCrop(size),
+            ToLabel(),
+            Relabel(255, 21)    ## So as to replace the 255(boundaries) label as 21
+        ])
+    
 
     transform = {'img': input_transform, 'gt': target_transform}
     return transform
