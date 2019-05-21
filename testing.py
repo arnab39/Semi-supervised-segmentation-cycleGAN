@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 from metric import metric
 from torch import nn
 from torch.autograd import Variable
@@ -50,7 +51,7 @@ def test(args):
                 new_img = prediction[j]     ### Taking a particular image from the batch
                 new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
 
-                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy())
+                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy().astype(np.uint8))
 
                 ### getting IoU of this particular image
                 res = metric(real_segmentation_img, new_img)
@@ -85,7 +86,7 @@ def test(args):
                 new_img = prediction[j]     ### Taking a particular image from the batch
                 new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
 
-                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy())
+                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy().astype(np.uint8))
 
                 ### getting IoU of this particular image
                 res = metric(real_segmentation_img, new_img)

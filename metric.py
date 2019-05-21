@@ -29,8 +29,8 @@ def metric(real_seg, test_seg):
     common_labels = np.intersect1d(real_labels, test_labels)
 
     #### The labels that are extra in the test and real case
-    extra_labels_in_real_seg = [i for i in real_labels for i not in common_labels]
-    extra_labels_in_test_seg = [i for i in test_labels for i not in common_labels]
+    extra_labels_in_real_seg = [i for i in real_labels if i not in common_labels]
+    extra_labels_in_test_seg = [i for i in test_labels if i not in common_labels]
 
     IoU = {}
 
@@ -44,7 +44,7 @@ def metric(real_seg, test_seg):
                 if(real_seg_array[j][k] == common_labels[i]):
                     if(test_seg_array[j][k] == common_labels[i]):
                         common += 1
-                    elif:
+                    else:
                         real_not_test += 1
                 elif(test_seg_array[j][k] == common_labels[i]):
                     test_not_real += 1
