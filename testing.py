@@ -1,5 +1,6 @@
 import os
 import torch
+from metric import metric
 from torch import nn
 from torch.autograd import Variable
 import torchvision
@@ -26,6 +27,9 @@ def test(args):
 
     Gsi = utils.cuda(Gsi)
 
+    ### dict containing IoU of every test image
+    IoU = {}
+
     if(args.model == 'supervised_model'):
 
         ### loading the checkpoint
@@ -37,7 +41,7 @@ def test(args):
 
         ### run
         Gsi.eval()
-        for i, (image_test, _, image_name) in enumerate(test_loader):
+        for i, (image_test, real_segmentation, image_name) in enumerate(test_loader):
             image_test = utils.cuda(image_test)
             seg_map = Gsi(image_test)
 
@@ -46,11 +50,21 @@ def test(args):
                 new_img = prediction[j]     ### Taking a particular image from the batch
                 new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
 
+                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy())
+
+                ### getting IoU of this particular image
+                res = metric(real_segmentation_img, new_img)
+
+                IoU[image_name[j]] = res
+
                 ### Now the new_img is PIL.Image
                 new_img.save(os.path.join(args.results_dir+'/supervised/'+image_name[j]+'.png'))
+
             
             print('Epoch-', str(i+1), ' Done!')
         
+        torch.save(os.path.join(args.results_dir+'/supervised/'+'accuracy.ckpt'))
+
     elif(args.model == 'semisupervised_cycleGAN'):
 
         ### loading the checkpoint
@@ -62,7 +76,7 @@ def test(args):
         
         ### run
         Gsi.eval()
-        for i, (image_test, _, image_name) in enumerate(test_loader):
+        for i, (image_test, real_segmentation, image_name) in enumerate(test_loader):
             image_test = utils.cuda(image_test)
             seg_map = Gsi(image_test)
 
@@ -71,7 +85,16 @@ def test(args):
                 new_img = prediction[j]     ### Taking a particular image from the batch
                 new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
 
+                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy())
+
+                ### getting IoU of this particular image
+                res = metric(real_segmentation_img, new_img)
+
+                IoU[image_name[j]] = res
+
                 ### Now the new_img is PIL.Image
                 new_img.save(os.path.join(args.results_dir+'/unsupervised/'+image_name[j]+'.png'))
             
             print('Epoch-', str(i+1), ' Done!')
+        
+        torch.save(os.path.join(args.results_dir+'/unsupervised/'+'accuracy.ckpt'))
