@@ -64,7 +64,7 @@ def test(args):
             
             print('Epoch-', str(i+1), ' Done!')
         
-        torch.save(os.path.join(args.results_dir+'/supervised/'+'accuracy.ckpt'))
+        torch.save(IoU, os.path.join(args.results_dir+'/supervised/'+'accuracy.ckpt'))
 
     elif(args.model == 'semisupervised_cycleGAN'):
 
@@ -98,4 +98,4 @@ def test(args):
             
             print('Epoch-', str(i+1), ' Done!')
         
-        torch.save(os.path.join(args.results_dir+'/unsupervised/'+'accuracy.ckpt'))
+        torch.save(IoU, os.path.join(args.results_dir+'/unsupervised/'+'accuracy.ckpt'))
