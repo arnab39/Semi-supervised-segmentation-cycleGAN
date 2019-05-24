@@ -88,6 +88,165 @@ class ResnetGenerator(nn.Module):
     def forward(self, x):
         return self.res_model(x)
 
+
+class ENet(nn.Module):
+    '''
+    num_classes : The number of classes to segment the image into
+    encoder_relu : whether to include relu or prelu for encoder part
+    decoder_relu : whether to include relu or prelu for decoder part
+    '''
+    def __init__(self, num_classes, encoder_relu=False, decoder_relu=True):
+        super().__init__()
+
+        self.initial_block = InitialBlock(3, 16, padding=1, relu=encoder_relu)
+
+        # Stage 1 - Encoder
+        self.downsample1_0 = DownsamplingBottleneck(
+            16,
+            64,
+            padding=1,
+            return_indices=True,
+            dropout_prob=0.01,
+            relu=encoder_relu)
+        self.regular1_1 = RegularBottleneck(
+            64, padding=1, dropout_prob=0.01, relu=encoder_relu)
+        self.regular1_2 = RegularBottleneck(
+            64, padding=1, dropout_prob=0.01, relu=encoder_relu)
+        self.regular1_3 = RegularBottleneck(
+            64, padding=1, dropout_prob=0.01, relu=encoder_relu)
+        self.regular1_4 = RegularBottleneck(
+            64, padding=1, dropout_prob=0.01, relu=encoder_relu)
+        
+        # Stage 2 - Encoder
+        self.downsample2_0 = DownsamplingBottleneck(
+            64,
+            128,
+            padding=1,
+            return_indices=True,
+            dropout_prob=0.1,
+            relu=encoder_relu)
+        self.regular2_1 = RegularBottleneck(
+            128, padding=1, dropout_prob=0.1, relu=encoder_relu)
+        self.dilated2_2 = RegularBottleneck(
+            128, dilation=2, padding=2, dropout_prob=0.1, relu=encoder_relu)
+        self.asymmetric2_3 = RegularBottleneck(
+            128,
+            kernel_size=5,
+            padding=2,
+            asymmetric=True,
+            dropout_prob=0.1,
+            relu=encoder_relu)
+        self.dilated2_4 = RegularBottleneck(
+            128, dilation=4, padding=4, dropout_prob=0.1, relu=encoder_relu)
+        self.regular2_5 = RegularBottleneck(
+            128, padding=1, dropout_prob=0.1, relu=encoder_relu)
+        self.dilated2_6 = RegularBottleneck(
+            128, dilation=8, padding=8, dropout_prob=0.1, relu=encoder_relu)
+        self.asymmetric2_7 = RegularBottleneck(
+            128,
+            kernel_size=5,
+            asymmetric=True,
+            padding=2,
+            dropout_prob=0.1,
+            relu=encoder_relu)
+        self.dilated2_8 = RegularBottleneck(
+            128, dilation=16, padding=16, dropout_prob=0.1, relu=encoder_relu)
+
+         # Stage 3 - Encoder
+        self.regular3_0 = RegularBottleneck(
+            128, padding=1, dropout_prob=0.1, relu=encoder_relu)
+        self.dilated3_1 = RegularBottleneck(
+            128, dilation=2, padding=2, dropout_prob=0.1, relu=encoder_relu)
+        self.asymmetric3_2 = RegularBottleneck(
+            128,
+            kernel_size=5,
+            padding=2,
+            asymmetric=True,
+            dropout_prob=0.1,
+            relu=encoder_relu)
+        self.dilated3_3 = RegularBottleneck(
+            128, dilation=4, padding=4, dropout_prob=0.1, relu=encoder_relu)
+        self.regular3_4 = RegularBottleneck(
+            128, padding=1, dropout_prob=0.1, relu=encoder_relu)
+        self.dilated3_5 = RegularBottleneck(
+            128, dilation=8, padding=8, dropout_prob=0.1, relu=encoder_relu)
+        self.asymmetric3_6 = RegularBottleneck(
+            128,
+            kernel_size=5,
+            asymmetric=True,
+            padding=2,
+            dropout_prob=0.1,
+            relu=encoder_relu)
+        self.dilated3_7 = RegularBottleneck(
+            128, dilation=16, padding=16, dropout_prob=0.1, relu=encoder_relu)
+
+        # Stage 4 - Decoder
+        self.upsample4_0 = UpsamplingBottleneck(
+            128, 64, padding=1, dropout_prob=0.1, relu=decoder_relu)
+        self.regular4_1 = RegularBottleneck(
+            64, padding=1, dropout_prob=0.1, relu=decoder_relu)
+        self.regular4_2 = RegularBottleneck(
+            64, padding=1, dropout_prob=0.1, relu=decoder_relu)
+
+        # Stage 5 - Decoder
+        self.upsample5_0 = UpsamplingBottleneck(
+            64, 16, padding=1, dropout_prob=0.1, relu=decoder_relu)
+        self.regular5_1 = RegularBottleneck(
+            16, padding=1, dropout_prob=0.1, relu=decoder_relu)
+        self.transposed_conv = nn.ConvTranspose2d(
+            16,
+            num_classes,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+            output_padding=1,
+            bias=False) 
+    
+    def forward(self, x):
+        # Initial block
+        x = self.initial_block(x)
+
+        # Stage 1 - Encoder
+        x, max_indices1_0 = self.downsample1_0(x)
+        x = self.regular1_1(x)
+        x = self.regular1_2(x)
+        x = self.regular1_3(x)
+        x = self.regular1_4(x)
+
+        # Stage 2 - Encoder
+        x, max_indices2_0 = self.downsample2_0(x)
+        x = self.regular2_1(x)
+        x = self.dilated2_2(x)
+        x = self.asymmetric2_3(x)
+        x = self.dilated2_4(x)
+        x = self.regular2_5(x)
+        x = self.dilated2_6(x)
+        x = self.asymmetric2_7(x)
+        x = self.dilated2_8(x)
+
+        # Stage 3 - Encoder
+        x = self.regular3_0(x)
+        x = self.dilated3_1(x)
+        x = self.asymmetric3_2(x)
+        x = self.dilated3_3(x)
+        x = self.regular3_4(x)
+        x = self.dilated3_5(x)
+        x = self.asymmetric3_6(x)
+        x = self.dilated3_7(x)
+
+        # Stage 4 - Decoder
+        x = self.upsample4_0(x, max_indices2_0)
+        x = self.regular4_1(x)
+        x = self.regular4_2(x)
+
+        # Stage 5 - Decoder
+        x = self.upsample5_0(x, max_indices1_0)
+        x = self.regular5_1(x)
+        x = self.transposed_conv(x)
+
+        return x
+
+
 def define_Gen(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, gpu_ids=[0]):
     gen_net = None
     norm_layer = get_norm_layer(norm_type=norm)
@@ -100,6 +259,9 @@ def define_Gen(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, 
         gen_net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
         gen_net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'enet':
+        ### For ENet the input_nc is always 3
+        gen_net = ENet(num_classes = output_nc, encoder_relu=False, decoder_relu=True)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
 
