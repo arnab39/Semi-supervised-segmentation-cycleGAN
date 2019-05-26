@@ -1,6 +1,7 @@
 import functools
 from torch.nn import init
 import torch.nn as nn
+import torch.nn.functional as F
 import torch
 
 def get_norm_layer(norm_type='instance'):
