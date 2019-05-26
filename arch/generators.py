@@ -258,25 +258,25 @@ class LEDNet(nn.Module):
         ### Encoder
         self.downsample_1 = Downsample_Block_led(in_channels, 32, kernel_size=3, padding=1, relu=encoder_relu)
 
-        self.ssnbt_1_1 = SSnbt(32, kernel_size=3, padding=1, groups=4, relu=encoder_relu)
-        self.ssnbt_1_2 = SSnbt(32, kernel_size=3, padding=1, groups=4, relu=encoder_relu)
-        self.ssnbt_1_3 = SSnbt(32, kernel_size=3, padding=1, groups=4, relu=encoder_relu)
+        self.ssnbt_1_1 = SSnbt(32, kernel_size=3, padding=1, groups=4, relu=encoder_relu, drop_prob=0.01)
+        self.ssnbt_1_2 = SSnbt(32, kernel_size=3, padding=1, groups=4, relu=encoder_relu, drop_prob=0.01)
+        self.ssnbt_1_3 = SSnbt(32, kernel_size=3, padding=1, groups=4, relu=encoder_relu, drop_prob=0.01)
 
-        self.downsample_2 = Downsample_Block_led(32, 64, kernel_size=4, padding=1, relu=encoder_relu)
+        self.downsample_2 = Downsample_Block_led(32, 64, kernel_size=3, padding=1, relu=encoder_relu)
 
-        self.ssnbt_2_1 = SSnbt(64, kernel_size=3, padding=1, groups=4, relu=encoder_relu)
-        self.ssnbt_2_2 = SSnbt(64, kernel_size=3, padding=1, groups=4, relu=encoder_relu)
+        self.ssnbt_2_1 = SSnbt(64, kernel_size=3, padding=1, groups=4, relu=encoder_relu, drop_prob=0.01)
+        self.ssnbt_2_2 = SSnbt(64, kernel_size=3, padding=1, groups=4, relu=encoder_relu, drop_prob=0.01)
 
         self.downsample_3 = Downsample_Block_led(64, 128, kernel_size=3, padding=1, relu=encoder_relu)
 
-        self.ssnbt_3_1 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilated=True, dilation=1, relu=encoder_relu)
-        self.ssnbt_3_2 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilated=True, dilation=2, relu=encoder_relu)
-        self.ssnbt_3_3 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilated=True, dilation=5, relu=encoder_relu)
-        self.ssnbt_3_4 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilated=True, dilation=9, relu=encoder_relu)
-        self.ssnbt_3_5 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilated=True, dilation=2, relu=encoder_relu)
-        self.ssnbt_3_6 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilated=True, dilation=5, relu=encoder_relu)
-        self.ssnbt_3_7 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilated=True, dilation=9, relu=encoder_relu)
-        self.ssnbt_3_8 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilated=True, dilation=17, relu=encoder_relu)
+        self.ssnbt_3_1 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilation=1, relu=encoder_relu, drop_prob=0.1)
+        self.ssnbt_3_2 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilation=2, relu=encoder_relu, drop_prob=0.1)
+        self.ssnbt_3_3 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilation=5, relu=encoder_relu, drop_prob=0.1)
+        self.ssnbt_3_4 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilation=9, relu=encoder_relu, drop_prob=0.1)
+        self.ssnbt_3_5 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilation=2, relu=encoder_relu, drop_prob=0.1)
+        self.ssnbt_3_6 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilation=5, relu=encoder_relu, drop_prob=0.1)
+        self.ssnbt_3_7 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilation=9, relu=encoder_relu, drop_prob=0.1)
+        self.ssnbt_3_8 = SSnbt(128, kernel_size=3, padding=1, groups=8, dilation=17, relu=encoder_relu, drop_prob=0.1)
 
         ### Decoder
         self.apn = APN(128, n_classes, image_dim= image_dim // 8, relu=decoder_relu)

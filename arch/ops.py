@@ -382,7 +382,7 @@ class SSnbt(nn.Module):
     The class for the implementation split-shuffle-non-bottleneck block
     '''
 
-    def __init__(self, channels, kernel_size = 3, padding = 0, groups=3, dilated=False, dilation=1, bias= False, relu=False):
+    def __init__(self, channels, kernel_size = 3, padding = 0, groups=4, dilation=1, bias= True, relu=False, drop_prob=0):
         '''
         groups: parameter for determining the shuffling order in the shuffleBlock
         '''
@@ -393,8 +393,6 @@ class SSnbt(nn.Module):
         else:
             activation = nn.PReLU()
 
-        self.dilated = dilated
-
         ### Now firstly there will be channel split and hence we have to write for left and right parts of
         ### our model
 
@@ -404,10 +402,7 @@ class SSnbt(nn.Module):
 
         self.split = Channel_Split(channels)
 
-        self.l_conv1 = nn.Sequential(
-                            nn.Conv2d(mid_channels, mid_channels, kernel_size=(kernel_size, 1), stride=1, padding=(padding, 0), dilation = 1, bias=bias),
-                            activation
-        )
+        self.l_conv1 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(kernel_size, 1), stride=1, padding=(padding, 0), dilation = 1, bias=bias)
 
         self.l_conv2 = nn.Sequential(
                             nn.Conv2d(mid_channels, mid_channels, kernel_size = (1, kernel_size), stride=1, padding=(0, padding), dilation=1, bias=bias),
@@ -415,10 +410,7 @@ class SSnbt(nn.Module):
                             activation
         )
 
-        self.r_conv1 = nn.Sequential(
-                            nn.Conv2d(mid_channels, mid_channels, kernel_size = (1, kernel_size), stride=1, padding=(0, padding), dilation=1, bias=bias),
-                            activation
-        )
+        self.r_conv1 = nn.Conv2d(mid_channels, mid_channels, kernel_size = (1, kernel_size), stride=1, padding=(0, padding), dilation=1, bias=bias)
 
         self.r_conv2 = nn.Sequential(
                             nn.Conv2d(mid_channels, mid_channels, kernel_size = (kernel_size, 1), stride=1, padding=(padding, 0), dilation=1, bias=bias),
@@ -426,28 +418,29 @@ class SSnbt(nn.Module):
                             activation
         )
 
-        if dilated:
-            self.l_conv3 = nn.Sequential(
-                            nn.Conv2d(mid_channels, mid_channels, kernel_size=(kernel_size, 1), stride=1, padding=(padding + dilation - 1, 0), dilation = dilation, bias=bias),
-                            activation
-            )
+        self.l_conv3 = nn.Sequential(
+                        nn.Conv2d(mid_channels, mid_channels, kernel_size=(kernel_size, 1), stride=1, padding=(padding + dilation - 1, 0), dilation = dilation, bias=bias),
+                        activation
+        )
 
-            self.l_conv4 = nn.Sequential(
-                                nn.Conv2d(mid_channels, mid_channels, kernel_size = (1, kernel_size), stride=1, padding=(0, padding + dilation - 1), dilation=dilation, bias=bias),
-                                nn.BatchNorm2d(mid_channels),
-                                activation
-            )
-
-            self.r_conv3 = nn.Sequential(
+        self.l_conv4 = nn.Sequential(
                             nn.Conv2d(mid_channels, mid_channels, kernel_size = (1, kernel_size), stride=1, padding=(0, padding + dilation - 1), dilation=dilation, bias=bias),
+                            nn.BatchNorm2d(mid_channels),
                             activation
-            )
+        )
 
-            self.r_conv4 = nn.Sequential(
-                                nn.Conv2d(mid_channels, mid_channels, kernel_size = (kernel_size, 1), stride=1, padding=(padding + dilation - 1, 0), dilation=dilation, bias=bias),
-                                nn.BatchNorm2d(mid_channels),
-                                activation
-            )
+        self.r_conv3 = nn.Sequential(
+                        nn.Conv2d(mid_channels, mid_channels, kernel_size = (1, kernel_size), stride=1, padding=(0, padding + dilation - 1), dilation=dilation, bias=bias),
+                        activation
+        )
+
+        self.r_conv4 = nn.Sequential(
+                            nn.Conv2d(mid_channels, mid_channels, kernel_size = (kernel_size, 1), stride=1, padding=(padding + dilation - 1, 0), dilation=dilation, bias=bias),
+                            nn.BatchNorm2d(mid_channels),
+                            activation
+        )
+
+        self.regularizer = nn.Dropout2d(p=drop_prob)
         
         self.out_activation = activation
         self.shuffle = ShuffleBlock(groups=groups)
@@ -461,13 +454,15 @@ class SSnbt(nn.Module):
         l_input = self.l_conv2(l_input)
         r_input = self.r_conv1(r_input)
         r_input = self.r_conv2(r_input)
-        if self.dilated:
-            l_input =  self.l_conv3(l_input)
-            l_input = self.l_conv4(l_input)
-            r_input = self.r_conv3(r_input)
-            r_input = self.r_conv4(r_input)
+
+        l_input =  self.l_conv3(l_input)
+        l_input = self.l_conv4(l_input)
+        r_input = self.r_conv3(r_input)
+        r_input = self.r_conv4(r_input)
         
         ext = torch.cat((l_input, r_input), 1)
+
+        ext = self.regularizer(ext)
 
         out = main + ext
         out = self.out_activation(out)
@@ -483,7 +478,7 @@ class Downsample_Block_led(nn.Module):
     So basically we will do two operations in parallel, conv and max pool and then concat both of them
     '''
 
-    def __init__(self, in_channels, out_channels, kernel_size=3, padding=0, bias=False, relu=True):
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=0, bias=True, relu=True):
         super().__init__()
 
         if relu:
@@ -491,27 +486,25 @@ class Downsample_Block_led(nn.Module):
         else:
             activation = nn.PReLU()
         
-        self.conv = nn.Sequential(
-                            nn.Conv2d(in_channels, out_channels-in_channels, kernel_size=kernel_size, stride=2, padding=padding, bias=bias),
-                            activation
-        )
+        self.conv = nn.Conv2d(in_channels, out_channels-in_channels, kernel_size=kernel_size, stride=2, padding=padding, bias=bias)
 
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.out_activation = activation
     
     def forward(self, x):
         main = self.conv(x)
         ext = self.maxpool(x)
 
         out = torch.cat((main, ext), 1)
-
+        out = self.out_activation(out)
         return out
 
 class APN(nn.Module):
     '''
-    This is the Attention Pyramid Network
+    This is the Attention Pyramid Network including the whole upsampling block
     '''
 
-    def __init__(self, in_channels, out_channels, image_dim, bias=False, relu=True):
+    def __init__(self, in_channels, out_channels, image_dim, bias=True, relu=True):
         '''
         image_dim = dimension of the incoming image
         '''
@@ -524,16 +517,19 @@ class APN(nn.Module):
 
         self.conv_33 = nn.Sequential(
                             nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=2, padding=1, bias=bias),
+                            nn.BatchNorm2d(in_channels),
                             activation
         )
 
         self.conv_55 = nn.Sequential(
                             nn.Conv2d(in_channels, in_channels, kernel_size=5, stride=2, padding=2, bias=bias),
+                            nn.BatchNorm2d(in_channels),
                             activation
         )
 
         self.conv_77 = nn.Sequential(
                             nn.Conv2d(in_channels, in_channels, kernel_size=7, stride=2, padding=3, bias=bias),
+                            nn.BatchNorm2d(in_channels),
                             activation
         )
 
@@ -542,18 +538,10 @@ class APN(nn.Module):
                             nn.BatchNorm2d(out_channels),
                             activation
         )
-        self.conv_77_upsample = nn.Sequential(
-                            nn.ConvTranspose2d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1, bias=bias),
-                            activation
-        )
 
         self.conv_55_toC = nn.Sequential(
                             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=bias),
                             nn.BatchNorm2d(out_channels),
-                            activation
-        )
-        self.conv_55_upsample = nn.Sequential(
-                            nn.ConvTranspose2d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1, bias=bias),
                             activation
         )
 
@@ -562,11 +550,6 @@ class APN(nn.Module):
                             nn.BatchNorm2d(out_channels),
                             activation
         )
-        self.conv_33_upsample = nn.Sequential(
-                            nn.ConvTranspose2d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1, bias=bias),
-                            activation
-        )
-
 
         self.conv_11 = nn.Sequential(
                             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=bias),
@@ -574,28 +557,15 @@ class APN(nn.Module):
                             activation
         )
 
-        self.global_pool = nn.Sequential(
-                            nn.AvgPool2d(kernel_size = (image_dim, image_dim), stride=0, padding=0),
-                            activation
-        )
+        self.global_pool = nn.AvgPool2d(kernel_size = (image_dim, image_dim), stride=0, padding=0)
         self.pool_conv_toC = nn.Sequential(
                             nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=bias),
                             nn.BatchNorm2d(out_channels),
                             activation
         )
-        self.pool_upsample = nn.Sequential(
-                            nn.ConvTranspose2d(out_channels, out_channels, kernel_size=image_dim, stride=1, padding=0, bias=bias),
-                            activation
-        )
 
-        self.final_upsample = nn.Sequential(
-                            nn.ConvTranspose2d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1, bias=bias),
-                            activation,
-                            nn.ConvTranspose2d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1, bias=bias),
-                            activation,
-                            nn.ConvTranspose2d(out_channels, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1, bias=bias),
-                            activation
-        )
+        self.upsample_times2 = nn.UpsamplingBilinear2d(scale_factor=2)
+        self.upsample_globalPool = nn.UpsamplingBilinear2d(size = (image_dim, image_dim))
     
     def forward(self, x):
         output_conv33 = self.conv_33(x)
@@ -604,25 +574,25 @@ class APN(nn.Module):
 
         output_conv77 = self.conv_77(output_conv55)
         output_conv77_toC = self.conv_77_toC(output_conv77)
-        output_conv77_upsample = self.conv_77_upsample(output_conv77_toC)
+        output_conv77_upsample = self.upsample_times2(output_conv77_toC)
 
         output_conv55_toC = self.conv_55_toC(output_conv55)
         output_conv55_toC = output_conv55_toC + output_conv77_upsample
-        output_conv55_upsample = self.conv_55_upsample(output_conv55_toC)
+        output_conv55_upsample = self.upsample_times2(output_conv55_toC)
 
         output_conv33_toC = self.conv_33_toC(output_conv33)
         output_conv33_toC = output_conv33_toC + output_conv55_upsample
-        output_conv33_upsample = self.conv_33_upsample(output_conv33_toC)
+        output_conv33_upsample = self.upsample_times2(output_conv33_toC)
 
         output_conv11 = self.conv_11(x)
 
         output_global_pool = self.global_pool(x)
         output_pool_conv_toC = self.pool_conv_toC(output_global_pool)
-        output_pool_upsample = self.pool_upsample(output_pool_conv_toC)
+        output_pool_upsample = self.upsample_globalPool(output_pool_conv_toC)
 
         output_conv11 = output_conv11 * output_conv33_upsample
         output_conv11 = output_conv11 + output_pool_upsample
 
-        final_output = self.final_upsample(output_conv11)
+        final_output = F.upsample_bilinear(output_conv11, scale_factor=8)
 
         return final_output 
