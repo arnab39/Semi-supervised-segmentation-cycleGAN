@@ -12,6 +12,7 @@ import utils
 from arch import define_Gen, define_Dis, set_grad
 from data_utils import VOCDataset, CityscapesDataset, get_transformation
 from utils import make_one_hot
+from tensorboardX import SummaryWriter
 
 '''
 Class for CycleGAN with train() as a member function
@@ -20,6 +21,8 @@ Class for CycleGAN with train() as a member function
 root = '/home/AP84830/Semi-supervised-cycleGAN/data/VOC2012'
 root_cityscapes = "Cityspaces"
 
+### The location for tensorboard visualizations
+tensorboard_loc = '/home/AP84830/Semi-supervised-cycleGAN-aniket/tensorboard_results/first_run'
 
 class supervised_model(object):
     def __init__(self, args):
@@ -32,6 +35,9 @@ class supervised_model(object):
 
         self.CE = nn.CrossEntropyLoss()
         self.gsi_optimizer = torch.optim.Adam(self.Gsi.parameters(), lr=args.lr, betas=(0.9, 0.999))
+
+        ### writer for tensorboard
+        self.writer_supervised = SummaryWriter(tensorboard_loc + '_supervised')
 
         self.args = args
 
@@ -87,11 +93,15 @@ class supervised_model(object):
                 print("Epoch: (%3d) (%5d/%5d) | Crossentropy Loss:%.2e" %
                       (epoch, i + 1, len(labeled_loader), fullsupervisedloss.item()))
 
+                self.writer_supervised.add_scalar('Supervised Loss', fullsupervisedloss, i)
+
             # Override the latest checkpoint 
             utils.save_checkpoint({'epoch': epoch + 1,
                                    'Gsi': self.Gsi.state_dict(),
                                    'gsi_optimizer': self.gsi_optimizer.state_dict()},
                                   '%s/latest_supervised_model.ckpt' % (self.args.checkpoint_dir))
+        
+        self.writer_supervised.close()
 
 
 class semisuper_cycleGAN(object):
@@ -117,6 +127,9 @@ class semisuper_cycleGAN(object):
         self.MSE = nn.MSELoss()
         self.L1 = nn.L1Loss()
         self.CE = nn.CrossEntropyLoss()
+
+        ### Tensorboard writer
+        self.writer_semisuper = SummaryWriter(tensorboard_loc + '_semisuper')
 
         # Optimizers
         #####################################################
@@ -207,6 +220,7 @@ class semisuper_cycleGAN(object):
                 lab_gt = self.Gsi(l_img)
 
                 recon_img = self.Gis(fake_gt.float())
+                recon_lab_img = self.Gis(lab_gt.float())
                 recon_gt = self.Gsi(fake_img.float())
 
                 img_idt = self.Gis(make_one_hot(l_gt, args.dataset).float())
@@ -292,6 +306,10 @@ class semisuper_cycleGAN(object):
                 print("Epoch: (%3d) (%5d/%5d) | Dis Loss:%.2e | Unlab Gen Loss:%.2e | Lab Gen loss:%.2e" %
                   (epoch, i + 1, min(len(labeled_loader), len(unlabeled_loader)),
                    img_dis_loss + gt_dis_loss, unsupervisedloss, fullsupervisedloss))
+                
+                self.writer_semisuper.add_scalar('Dis Loss', img_dis_loss + gt_dis_loss, i)
+                self.writer_semisuper.add_scalar('Unlabelled Loss', unsupervisedloss, i)
+                self.writer_semisuper.add_scalar('Labelled Loss', fullsupervisedloss)
 
             #miou = utils.val(self.Gis, val_loader, nclass=21, nogpu=False)
 
@@ -311,3 +329,5 @@ class semisuper_cycleGAN(object):
             ########################
             self.g_lr_scheduler.step()
             self.d_lr_scheduler.step()
+        
+        self.writer_semisuper.close()
