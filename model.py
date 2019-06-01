@@ -93,7 +93,11 @@ class supervised_model(object):
                 print("Epoch: (%3d) (%5d/%5d) | Crossentropy Loss:%.2e" %
                       (epoch, i + 1, len(labeled_loader), fullsupervisedloss.item()))
 
-                self.writer_supervised.add_scalar('Supervised Loss', fullsupervisedloss, i)
+                self.writer_supervised.add_scalars('Supervised Loss', {'CE Loss ':fullsupervisedloss}, len(labeled_loader)*epoch + i)
+
+            with torch.no_grad():
+                fake = self.Gsi(l_img).detach()
+            self.writer_supervised.add_image('Generated segmented image', torchvision.utils.make_grid(fake, nrow=5, normalize=True), epoch)
 
             # Override the latest checkpoint 
             utils.save_checkpoint({'epoch': epoch + 1,
@@ -251,7 +255,10 @@ class semisuper_cycleGAN(object):
 
                 # Total generators losses
                 ###################################################
-                fullsupervisedloss = self.CE(lab_gt, l_gt.squeeze(1)) + self.MSE(fake_img, l_img)
+                lab_loss_CE = self.CE(lab_gt, l_gt.squeeze(1))
+                lab_loss_MSE = self.MSE(fake_img, l_img)
+
+                fullsupervisedloss = lab_loss_CE + lab_loss_MSE
 
                 unsupervisedloss = img_gen_loss + gt_gen_loss + img_cycle_loss + gt_cycle_loss + img_idt_loss + gt_idt_loss 
 
@@ -307,11 +314,17 @@ class semisuper_cycleGAN(object):
                   (epoch, i + 1, min(len(labeled_loader), len(unlabeled_loader)),
                    img_dis_loss + gt_dis_loss, unsupervisedloss, fullsupervisedloss))
                 
-                self.writer_semisuper.add_scalar('Dis Loss', img_dis_loss + gt_dis_loss, i)
-                self.writer_semisuper.add_scalar('Unlabelled Loss', unsupervisedloss, i)
-                self.writer_semisuper.add_scalar('Labelled Loss', fullsupervisedloss)
+                self.writer_semisuper.add_scalar('Dis Loss', {'img_dis_loss':img_dis_loss, 'gt_dis_loss':gt_dis_loss}, len(labeled_loader)*epoch + i)
+                self.writer_semisuper.add_scalar('Unlabelled Loss', {'img_gen_loss'; img_gen_loss, 'gt_gen_loss':gt_gen_loss, 'img_cycle_loss':img_cycle_loss, 'gt_cycle_loss':gt_cycle_loss, 'img_idt_loss':img_idt_loss, 'gt_idt_loss':gt_idt_loss}, len(labeled_loader)*epoch + i)
+                self.writer_semisuper.add_scalar('Labelled Loss', {'lab_loss_CE':lab_loss_CE, 'lab_loss_MSE':lab_loss_MSE}, len(labeled_loader)*epoch + i)
 
             #miou = utils.val(self.Gis, val_loader, nclass=21, nogpu=False)
+
+            with torch.no_grad():
+                fake_labelled = self.Gsi(l_img).detach()
+                fake_unlabelled = self.Gsi(unl_img).detach()
+            self.writer_semisuper.add_image('Generated segmentation for labelled image', torchvision.utils.make_grid(fake_labelled, nrow=5, normalize=True), epoch)
+            self.writer_semisuper.add_image('Generated segmentation for unlabelled image', torchvision.utils.make_grid(fake_unlabelled, nrow=5, normalize=True), epoch)
 
             
             # Override the latest checkpoint
