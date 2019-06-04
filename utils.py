@@ -29,6 +29,22 @@ def colorize_mask(mask):
 
     return new_mask
 
+### To convert a paletted image to a tensor image of 3 dimension
+### This is because a simple paletted image cannot be viewed with all the details
+def PIL_to_tensor(img):
+    '''
+    Here img is of the type PIL.Image
+    '''
+    img_arr = np.array(img, dtype='float32')
+    new_arr = np.zeros([3, img_arr.shape[0], img_arr.shape[1]], dtype='float32')
+
+    for i in range(new_arr.shape[0]):
+        new_arr[i, :, :] = img_arr
+    
+    return_tensor = torch.tensor(new_arr)
+
+    return return_tensor
+
 
 # To make directories
 def mkdir(paths):

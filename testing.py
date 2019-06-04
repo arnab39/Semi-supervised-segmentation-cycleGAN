@@ -13,7 +13,7 @@ from PIL import Image
 from arch import define_Gen
 from data_utils import VOCDataset, get_transformation
 
-root = '/home/AP84830/Semi-supervised-cycleGAN/data/VOC2012'
+root = './data/VOC2012'
 
 def test(args):
     transform = get_transformation((args.crop_height, args.crop_width), resize=True)

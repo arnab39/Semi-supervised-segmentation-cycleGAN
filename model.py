@@ -19,11 +19,11 @@ from tensorboardX import SummaryWriter
 Class for CycleGAN with train() as a member function
 
 '''
-root = '/home/AP84830/Semi-supervised-cycleGAN/data/VOC2012'
+root = './data/VOC2012'
 root_cityscapes = "Cityspaces"
 
 ### The location for tensorboard visualizations
-tensorboard_loc = '/home/AP84830/Semi-supervised-cycleGAN-aniket/tensorboard_results/first_run'
+tensorboard_loc = './tensorboard_results/first_run'
 
 class supervised_model(object):
     def __init__(self, args):
@@ -59,7 +59,7 @@ class supervised_model(object):
 
         # let the choice of dataset configurable
         if self.args.dataset == 'voc2012':
-            labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform,
+            labeled_set = VOCDataset(root_path=root, name='label', ratio=1.0, transformation=transform,
                                      augmentation=None)
             labeled_loader = DataLoader(labeled_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
         elif self.args.dataset == 'cityscapes':
@@ -246,8 +246,8 @@ class semisuper_cycleGAN(object):
                 assert img_idt.shape == unl_img.shape, ('img_idt: '+str(img_idt.shape)+' unl_img: '+str(unl_img.shape))
                 # Identity losses
                 ###################################################
-                img_idt_loss = self.L1(img_idt, unl_img) * args.lamda * args.idt_coef
-                gt_idt_loss = self.L1(gt_idt, make_one_hot(l_gt, args.dataset)) * args.lamda * args.idt_coef
+                # img_idt_loss = self.L1(img_idt, unl_img) * args.lamda * args.idt_coef
+                # gt_idt_loss = self.L1(gt_idt, make_one_hot(l_gt, args.dataset)) * args.lamda * args.idt_coef
 
                 # Adversarial losses
                 ###################################################
@@ -273,9 +273,9 @@ class semisuper_cycleGAN(object):
 
                 fullsupervisedloss = lab_loss_CE + lab_loss_MSE
 
-                unsupervisedloss = img_gen_loss + gt_gen_loss + img_cycle_loss + gt_cycle_loss + img_idt_loss + gt_idt_loss 
+                unsupervisedloss = img_gen_loss + gt_gen_loss + img_cycle_loss + gt_cycle_loss
 
-                gen_loss = args.omega * fullsupervisedloss + unsupervisedloss
+                gen_loss = args.gen_weight*(args.omega * fullsupervisedloss + unsupervisedloss)
 
                 # Update generators
                 ###################################################
@@ -328,7 +328,7 @@ class semisuper_cycleGAN(object):
                    img_dis_loss + gt_dis_loss, unsupervisedloss, fullsupervisedloss))
                 
                 self.writer_semisuper.add_scalars('Dis Loss', {'img_dis_loss':img_dis_loss, 'gt_dis_loss':gt_dis_loss}, len(labeled_loader)*epoch + i)
-                self.writer_semisuper.add_scalars('Unlabelled Loss', {'img_gen_loss': img_gen_loss, 'gt_gen_loss':gt_gen_loss, 'img_cycle_loss':img_cycle_loss, 'gt_cycle_loss':gt_cycle_loss, 'img_idt_loss':img_idt_loss, 'gt_idt_loss':gt_idt_loss}, len(labeled_loader)*epoch + i)
+                self.writer_semisuper.add_scalars('Unlabelled Loss', {'img_gen_loss': img_gen_loss, 'gt_gen_loss':gt_gen_loss, 'img_cycle_loss':img_cycle_loss, 'gt_cycle_loss':gt_cycle_loss}, len(labeled_loader)*epoch + i)
                 self.writer_semisuper.add_scalars('Labelled Loss', {'lab_loss_CE':lab_loss_CE, 'lab_loss_MSE':lab_loss_MSE}, len(labeled_loader)*epoch + i)
 
             #miou = utils.val(self.Gis, val_loader, nclass=21, nogpu=False)
@@ -354,8 +354,8 @@ class semisuper_cycleGAN(object):
                 img_tensor_unlabel = utils.PIL_to_tensor(new_img_unlabel)
                 display_tensor_unlabel[i, :, :, :] = img_tensor_unlabel
 
-            self.writer_supervised.add_image('Generated segmented image for labelled data ', torchvision.utils.make_grid(display_tensor_label, nrow=2, normalize=True), epoch)
-            self.writer_supervised.add_image('Generated segmented image for unlabelled data ', torchvision.utils.make_grid(display_tensor_unlabel, nrow=2, normalize=True), epoch)
+            self.writer_semisuper.add_image('Generated segmented image for labelled data ', torchvision.utils.make_grid(display_tensor_label, nrow=2, normalize=True), epoch)
+            self.writer_semisuper.add_image('Generated segmented image for unlabelled data ', torchvision.utils.make_grid(display_tensor_unlabel, nrow=2, normalize=True), epoch)
 
             
             # Override the latest checkpoint
