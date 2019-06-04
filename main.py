@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 import model as md
 from utils import create_link
 from testing import test
+from validation import validation
 
 
 # To get arguments from commandline
@@ -23,8 +24,10 @@ def get_args():
     parser.add_argument('--gen_weight', type=int, default=10)
     parser.add_argument('--training', type=bool, default=False)
     parser.add_argument('--testing', type=bool, default=False)
+    parser.add_argument('--validation', type=bool, default=False)
     parser.add_argument('--model', type=str, default='supervised_model')
     parser.add_argument('--results_dir', type=str, default='./results')
+    parser.add_argument('--validation_dir', type=str, defaut='./val_results')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/semisupervised_cycleGAN')
     parser.add_argument('--dataset',type=str,choices=['voc2012', 'cityscapes'],default='voc2012')
     parser.add_argument('--norm', type=str, default='instance', help='instance normalization or batch normalization')
@@ -59,6 +62,9 @@ def main():
   if args.testing:
       print("Testing")
       test(args)
+  if args.validation:
+      print("Validating")
+      validation(args)
 
 
 if __name__ == '__main__':

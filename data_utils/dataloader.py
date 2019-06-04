@@ -47,9 +47,9 @@ class VOCDataset(Dataset):
         assert transformation is not None, 'transformation must be provided, give None'
         self.transformation = transformation
         self.augmentation = augmentation
-        assert name in ('label', 'unlabel','val'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % name
+        assert name in ('label', 'unlabel','val', 'test'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % name
         assert 0 <= ratio <= 1, 'the ratio between "labeled" and "unlabeled" should be between 0 and 1, given %.1f' % ratio
-        np.random.seed(1)
+        np.random.seed(1)  ### Because of this we are not getting repeated images for labelled and unlabelled data
 
         total_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainval.txt')).values.reshape(-1)
         
@@ -61,32 +61,51 @@ class VOCDataset(Dataset):
         
         unlabeled_imgs = [x for x in train_imgs if x not in labeled_imgs]
 
+        test_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'test.txt')).values.reshape(-1)
+
         if self.name == 'label':
             self.imgs = labeled_imgs
         elif self.name == 'unlabel':
             self.imgs = unlabeled_imgs
         elif self.name == 'val':
-            self.imgs = val_imgs
+            self.imgs = val_img
+        elif self.name == 'test':
+            self.imgs = test_imgs
         else:
             raise ('{} not defined'.format(self.name))
             
         self.gts = self.imgs
 
     def __getitem__(self, index):
-        img_path = os.path.join(self.root_path, 'JPEGImages', self.imgs[index] + '.jpg')
-        gt_path = os.path.join(self.root_path, 'SegmentationClass', self.gts[index] + '.png')
 
-        img = Image.open(img_path).convert('RGB')
-        gt = Image.open(gt_path) #.convert('P')
+        if self.name == 'test':
+            img_path = os.path.join(self.root_path, 'JPEGImages', self.imgs[index] + '.jpg')
 
-        if self.augmentation is not None:
-            img, gt = self.augmentation(img, gt)
+            img = Image.open(img_path).convert('RGB')
 
-        if self.transformation:
-            img = self.transformation['img'](img)
-            gt = self.transformation['gt'](gt)
+            if self.augmentation is not None:
+                img = self.augmentation(img)
 
-        return img, gt, self.imgs[index]
+            if self.transformation:
+                img = self.transformation['img'](img)
+            
+            return img, self.imgs[index]
+
+        else:
+            img_path = os.path.join(self.root_path, 'JPEGImages', self.imgs[index] + '.jpg')
+            gt_path = os.path.join(self.root_path, 'SegmentationClass', self.gts[index] + '.png')
+
+            img = Image.open(img_path).convert('RGB')
+            gt = Image.open(gt_path) #.convert('P')
+
+            if self.augmentation is not None:
+                img, gt = self.augmentation(img, gt)
+
+            if self.transformation:
+                img = self.transformation['img'](img)
+                gt = self.transformation['gt'](gt)
+
+            return img, gt, self.imgs[index]
 
     def __len__(self):
         return len(self.imgs)
