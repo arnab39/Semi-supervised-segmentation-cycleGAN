@@ -51,24 +51,27 @@ class VOCDataset(Dataset):
         assert 0 <= ratio <= 1, 'the ratio between "labeled" and "unlabeled" should be between 0 and 1, given %.1f' % ratio
         np.random.seed(1)  ### Because of this we are not getting repeated images for labelled and unlabelled data
 
-        total_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainval.txt')).values.reshape(-1)
+        if self.name != 'test':
+            total_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainval.txt')).values.reshape(-1)
         
-        train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
+            train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
         
-        val_imgs = [x for x in total_imgs if x not in train_imgs]
+            val_imgs = [x for x in total_imgs if x not in train_imgs]
         
-        labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
+            labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
         
-        unlabeled_imgs = [x for x in train_imgs if x not in labeled_imgs]
+            unlabeled_imgs = [x for x in train_imgs if x not in labeled_imgs]
 
-        test_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'test.txt')).values.reshape(-1)
+        if self.name == 'test':
+            test_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'test.txt')).values.reshape(-1)
+            # test_imgs = np.array(test_imgs)
 
         if self.name == 'label':
             self.imgs = labeled_imgs
         elif self.name == 'unlabel':
             self.imgs = unlabeled_imgs
         elif self.name == 'val':
-            self.imgs = val_img
+            self.imgs = val_imgs
         elif self.name == 'test':
             self.imgs = test_imgs
         else:

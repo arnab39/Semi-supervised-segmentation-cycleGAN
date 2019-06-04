@@ -38,33 +38,34 @@ def validation(args):
             ckpt = utils.load_checkpoint('%s/latest_supervised_model.ckpt' % (args.checkpoint_dir))
             Gsi.load_state_dict(ckpt['Gsi'])
 
-            ### run
-	        Gsi.eval()
-	        for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
-	            image_test = utils.cuda(image_test)
-	            seg_map = Gsi(image_test)
-
-	            prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
-	            for j in range(prediction.shape[0]):
-	                new_img = prediction[j]     ### Taking a particular image from the batch
-	                new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
-
-	                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy().astype(np.uint8))
-
-	                ### getting IoU of this particular image
-	                res = metric(real_segmentation_img, new_img)
-
-	                IoU[image_name[j]] = res
-
-	                ### Now the new_img is PIL.Image
-	                new_img.save(os.path.join(args.validation_dir+'/supervised/'+image_name[j]+'.png'))
-
-	            
-	            print('Epoch-', str(i+1), ' Done!')
-	        
-	        torch.save(IoU, os.path.join(args.validation_dir+'/supervised/'+'accuracy.ckpt'))
         except:
-            print(' [*] No checkpoint!, Aborting validation!!!')
+            print(' [*] No checkpoint!')
+
+        ### run
+        Gsi.eval()
+        for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
+            image_test = utils.cuda(image_test)
+            seg_map = Gsi(image_test)
+
+            prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
+            for j in range(prediction.shape[0]):
+                new_img = prediction[j]     ### Taking a particular image from the batch
+                new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
+
+                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy().astype(np.uint8))
+
+                ### getting IoU of this particular image
+                res = metric(real_segmentation_img, new_img)
+
+                IoU[image_name[j]] = res
+
+                ### Now the new_img is PIL.Image
+                new_img.save(os.path.join(args.validation_dir+'/supervised/'+image_name[j]+'.png'))
+
+            
+            print('Epoch-', str(i+1), ' Done!')
+        
+        torch.save(IoU, os.path.join(args.validation_dir+'/supervised/'+'accuracy.ckpt'))
 
 
     elif(args.model == 'semisupervised_cycleGAN'):
@@ -74,30 +75,31 @@ def validation(args):
             ckpt = utils.load_checkpoint('%s/latest_semisuper_cycleGAN.ckpt' % (args.checkpoint_dir))
             Gsi.load_state_dict(ckpt['Gsi'])
 
-            ### run
-	        Gsi.eval()
-	        for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
-	            image_test = utils.cuda(image_test)
-	            seg_map = Gsi(image_test)
-
-	            prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
-	            for j in range(prediction.shape[0]):
-	                new_img = prediction[j]     ### Taking a particular image from the batch
-	                new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
-
-	                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy().astype(np.uint8))
-
-	                ### getting IoU of this particular image
-	                res = metric(real_segmentation_img, new_img)
-
-	                IoU[image_name[j]] = res
-
-	                ### Now the new_img is PIL.Image
-	                new_img.save(os.path.join(args.validation_dir+'/unsupervised/'+image_name[j]+'.png'))
-	            
-	            print('Epoch-', str(i+1), ' Done!')
-	        
-	        torch.save(IoU, os.path.join(args.validation_dir+'/unsupervised/'+'accuracy.ckpt'))
         except:
-            print(' [*] No checkpoint!, Aborting validation!!!')
+            print(' [*] No checkpoint!')
+
+        ### run
+        Gsi.eval()
+        for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
+            image_test = utils.cuda(image_test)
+            seg_map = Gsi(image_test)
+
+            prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
+            for j in range(prediction.shape[0]):
+                new_img = prediction[j]     ### Taking a particular image from the batch
+                new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
+
+                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy().astype(np.uint8))
+
+                ### getting IoU of this particular image
+                res = metric(real_segmentation_img, new_img)
+
+                IoU[image_name[j]] = res
+
+                ### Now the new_img is PIL.Image
+                new_img.save(os.path.join(args.validation_dir+'/unsupervised/'+image_name[j]+'.png'))
+            
+            print('Epoch-', str(i+1), ' Done!')
+        
+        torch.save(IoU, os.path.join(args.validation_dir+'/unsupervised/'+'accuracy.ckpt'))
         

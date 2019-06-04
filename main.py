@@ -27,7 +27,7 @@ def get_args():
     parser.add_argument('--validation', type=bool, default=False)
     parser.add_argument('--model', type=str, default='supervised_model')
     parser.add_argument('--results_dir', type=str, default='./results')
-    parser.add_argument('--validation_dir', type=str, defaut='./val_results')
+    parser.add_argument('--validation_dir', type=str, default='./val_results')
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/semisupervised_cycleGAN')
     parser.add_argument('--dataset',type=str,choices=['voc2012', 'cityscapes'],default='voc2012')
     parser.add_argument('--norm', type=str, default='instance', help='instance normalization or batch normalization')
