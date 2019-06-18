@@ -448,12 +448,12 @@ class semisuper_cycleGAN(object):
             val_image, val_gt = utils.cuda([val_image, val_gt], args.gpu_ids)
             with torch.no_grad():
                 fake_label = self.Gsi(val_image).detach()
+                fake_label = self.activation_softmax(fake_label)
                 fake_img = self.Gis(fake_label).detach()
 
                 fake_img_from_labels = self.Gis(make_one_hot(val_gt, args.dataset, args.gpu_ids).float()).detach()
                 fake_label_regenerated = self.Gsi(fake_img_from_labels).detach()
-            fake_label = self.activation_softmax(fake_label)
-            fake_label_regenerated = self.activation_softmax(fake_label_regenerated)
+                fake_label_regenerated = self.activation_softmax(fake_label_regenerated)
             fake_prediction_label = fake_label.data.max(1)[1].squeeze_(1).cpu().numpy()
             fake_regenerated_label = fake_label_regenerated.data.max(1)[1].squeeze_(1).cpu().numpy()
             val_gt = val_gt.cpu()
