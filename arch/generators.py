@@ -20,7 +20,7 @@ class UnetSkipConnectionBlock(nn.Module):
         if outermost:
             upconv = nn.ConvTranspose2d(inner_nc*2, outer_nc, kernel_size=4, stride=2, padding=1)
             down = [downconv]
-            up = [nn.ReLU(True), upconv, nn.Tanh()]
+            up = [nn.ReLU(True), upconv]
             model = down + [submodule] + up
         elif innermost:
             upconv = nn.ConvTranspose2d(inner_nc, outer_nc, kernel_size=4, stride=2, padding=1, bias=use_bias)
@@ -63,7 +63,7 @@ class UnetGenerator(nn.Module):
         return self.unet_model(input)
 
 class ResnetGenerator(nn.Module):
-    def __init__(self, input_nc=3, output_nc=3, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=True, num_blocks=6):
+    def __init__(self, input_nc=3, output_nc=3, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=True, num_blocks=6, softmax=False):
         super(ResnetGenerator, self).__init__()
         if type(norm_layer) == functools.partial:
             use_bias = norm_layer.func == nn.InstanceNorm2d
@@ -78,11 +78,17 @@ class ResnetGenerator(nn.Module):
         for i in range(num_blocks):
             res_model += [ResidualBlock(ngf * 4, norm_layer, use_dropout, use_bias)]
 
-        res_model += [dconv_norm_relu(ngf * 4, ngf * 2, 3, 2, 1, 1, norm_layer=norm_layer, bias=use_bias),
-                      dconv_norm_relu(ngf * 2, ngf * 1, 3, 2, 1, 1, norm_layer=norm_layer, bias=use_bias),
-                      nn.ReflectionPad2d(3),
-                      nn.Conv2d(ngf, output_nc, 7),
-                      nn.Tanh()]
+        if softmax:
+            res_model += [dconv_norm_relu(ngf * 4, ngf * 2, 3, 2, 1, 1, norm_layer=norm_layer, bias=use_bias),
+                          dconv_norm_relu(ngf * 2, ngf * 1, 3, 2, 1, 1, norm_layer=norm_layer, bias=use_bias),
+                          nn.ReflectionPad2d(3),
+                          nn.Conv2d(ngf, output_nc, 7)]
+        else:
+            res_model += [dconv_norm_relu(ngf * 4, ngf * 2, 3, 2, 1, 1, norm_layer=norm_layer, bias=use_bias),
+                          dconv_norm_relu(ngf * 2, ngf * 1, 3, 2, 1, 1, norm_layer=norm_layer, bias=use_bias),
+                          nn.ReflectionPad2d(3),
+                          nn.Conv2d(ngf, output_nc, 7),
+                          nn.Tanh()]
         self.res_model = nn.Sequential(*res_model)
 
     def forward(self, x):
@@ -315,9 +321,13 @@ def define_Gen(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, 
     norm_layer = get_norm_layer(norm_type=norm)
 
     if netG == 'resnet_9blocks':
-        gen_net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, num_blocks=9)
+        gen_net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, num_blocks=9, softmax=False)
+    elif netG == 'resnet_9blocks_softmax':
+        gen_net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, num_blocks=9, softmax=True)
     elif netG == 'resnet_6blocks':
-        gen_net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, num_blocks=6)
+        gen_net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, num_blocks=6, softmax=False)
+    elif netG == 'resnet_6blocks_softmax':
+        gen_net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, num_blocks=6, softmax=True)
     elif netG == 'unet_128':
         gen_net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':

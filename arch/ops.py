@@ -32,7 +32,6 @@ def init_network(net, gpu_ids=[]):
     if len(gpu_ids) > 0:
         assert(torch.cuda.is_available())
         net.cuda(gpu_ids[0])
-        net = torch.nn.DataParallel(net, gpu_ids)
     init_weights(net)
     return net
 
@@ -55,7 +54,6 @@ def dconv_norm_relu(in_dim, out_dim, kernel_size, stride = 1, padding=0, output_
         nn.ConvTranspose2d(in_dim, out_dim, kernel_size, stride,
                            padding, output_padding, bias = bias),
         norm_layer(out_dim), nn.ReLU(True))
-
 
 class ResidualBlock(nn.Module):
     def __init__(self, dim, norm_layer, use_dropout, use_bias):

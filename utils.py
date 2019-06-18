@@ -3,6 +3,7 @@ import os
 import shutil
 
 import numpy as np
+import torch.nn as nn
 import torch
 from PIL import Image
 
@@ -38,12 +39,63 @@ def PIL_to_tensor(img):
     img_arr = np.array(img, dtype='float32')
     new_arr = np.zeros([3, img_arr.shape[0], img_arr.shape[1]], dtype='float32')
 
-    for i in range(new_arr.shape[0]):
-        new_arr[i, :, :] = img_arr
+    for i in range(img_arr.shape[0]):
+        for j in range(img_arr.shape[1]):
+            # new_arr[i, :, :] = img_arr
+            index = int(img_arr[i, j]*3)
+            new_arr[0, i, j] = palette[index]
+            new_arr[1, i, j] = palette[index+1]
+            new_arr[2, i, j] = palette[index+2]
     
     return_tensor = torch.tensor(new_arr)
 
     return return_tensor
+
+def smoothen_label(label, alpha, gpu_id):
+    '''
+    For smoothening of the classification labels
+    
+    labels : tensor having dimensrions: batch_size*22*H*W filled with zeroes and ones
+    '''
+    torch.manual_seed(0)
+    try:
+        smoothen_array = -1*alpha + torch.rand([label.shape[0], label.shape[1], label.shape[2], label.shape[3]]) * (2*alpha)
+        smoothen_array = cuda(smoothen_array, gpu_id)
+        label = label + smoothen_array
+    except:
+        smoothen_array = -1*alpha + torch.rand([label.shape[0], label.shape[1], label.shape[2], label.shape[3]]) * (2*alpha)
+        label = label + smoothen_array
+
+    return label
+
+'''
+To be used to apply gaussian noise in the input to the discriminator
+'''
+class GaussianNoise(nn.Module):
+    """Gaussian noise regularizer.
+
+    Args:
+        sigma (float, optional): relative standard deviation used to generate the
+            noise. Relative means that it will be multiplied by the magnitude of
+            the value your are adding the noise to. This means that sigma can be
+            the same regardless of the scale of the vector.
+        is_relative_detach (bool, optional): whether to detach the variable before
+            computing the scale of the noise. If `False` then the scale of the noise
+            won't be seen as a constant but something to optimize: this will bias the
+            network to generate vectors with smaller values.
+    """
+
+    def __init__(self, sigma=0.1, is_relative_detach=True):
+        super().__init__()
+        self.sigma = sigma
+        self.is_relative_detach = is_relative_detach
+
+    def forward(self, x):
+        if self.training and self.sigma != 0:
+            scale = self.sigma * x.detach() if self.is_relative_detach else self.sigma * x
+            sampled_noise = torch.zeros(x.size()).normal_() * scale
+            x = x + sampled_noise
+        return x
 
 
 # To make directories
@@ -54,12 +106,12 @@ def mkdir(paths):
 
 
 # To make cuda tensor
-def cuda(xs):
+def cuda(xs, gpu_id):
     if torch.cuda.is_available():
         if not isinstance(xs, (list, tuple)):
-            return xs.cuda()
+            return xs.cuda(int(gpu_id[0]))
         else:
-            return [x.cuda() for x in xs]
+            return [x.cuda(int(gpu_id[0])) for x in xs]
     return xs
 
 
@@ -147,7 +199,7 @@ def recursive_glob(rootdir=".", suffix=""):
         if filename.endswith(suffix)
     ]
   
-def make_one_hot(labels, dataname):
+def make_one_hot(labels, dataname, gpu_id):
     '''
     Converts an integer label torch.autograd.Variable to a one-hot Variable.
 
@@ -173,7 +225,8 @@ def make_one_hot(labels, dataname):
 
     labels = labels.long()
     try:
-        one_hot = torch.cuda.FloatTensor(labels.size(0), C, labels.size(2), labels.size(3)).zero_()
+        one_hot = torch.FloatTensor(labels.size(0), C, labels.size(2), labels.size(3)).zero_()
+        one_hot = cuda(one_hot, gpu_id)
     except:
         one_hot = torch.FloatTensor(labels.size(0), C, labels.size(2), labels.size(3)).zero_()
     target = one_hot.scatter_(1, labels.data, 1)

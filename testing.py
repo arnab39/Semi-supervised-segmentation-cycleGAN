@@ -23,10 +23,8 @@ def test(args):
 
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False)
 
-    Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='unet_128', 
+    Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='resnet_9blocks', 
                                     norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)
-
-    Gsi = utils.cuda(Gsi)
 
     if(args.model == 'supervised_model'):
 
@@ -41,7 +39,7 @@ def test(args):
         ### run
         Gsi.eval()
         for i, (image_test, image_name) in enumerate(test_loader):
-            image_test = utils.cuda(image_test)
+            image_test = utils.cuda(image_test, args.gpu_ids)
             seg_map = Gsi(image_test)
 
             prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel

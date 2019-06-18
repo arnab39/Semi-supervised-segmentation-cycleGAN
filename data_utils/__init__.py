@@ -125,13 +125,13 @@ def get_transformation(size, resize=False):
             Resize(size),
             CenterCrop(size),
             ToTensor(),
-            Normalize([.485, .456, .406], [.229, .224, .225])
+            Normalize([.5, .5, .5], [.5, .5, .5])
         ]
     else:
         transfom_lst = [
             CenterCrop(size),
             ToTensor(),
-            Normalize([.485, .456, .406], [.229, .224, .225])
+            Normalize([.5, .5, .5], [.5, .5, .5])
         ]
     
     input_transform = Compose(transfom_lst)
