@@ -1,7 +1,6 @@
 import os
 import torch
 import numpy as np
-from metric import metric
 from torch import nn
 from torch.autograd import Variable
 import torchvision
@@ -23,11 +22,14 @@ def validation(args):
 
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False)
 
-    Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='resnet_9blocks', 
+    Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='resnet_9blocks_softmax', 
                                     norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)
 
-    ### dict containing IoU of every test image
-    IoU = {}
+    ### best_iou
+    best_iou = 0
+
+    ### Softmax activation
+    activation_softmax = nn.Softmax2d()
 
     if(args.model == 'supervised_model'):
 
@@ -35,6 +37,7 @@ def validation(args):
         try:
             ckpt = utils.load_checkpoint('%s/latest_supervised_model.ckpt' % (args.checkpoint_dir))
             Gsi.load_state_dict(ckpt['Gsi'])
+            best_iou = ckpt['best_iou']
 
         except:
             print(' [*] No checkpoint!')
@@ -44,18 +47,12 @@ def validation(args):
         for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
             image_test = utils.cuda(image_test, args.gpu_ids)
             seg_map = Gsi(image_test)
+            seg_map = activation_softmax(seg_map)
 
             prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
             for j in range(prediction.shape[0]):
                 new_img = prediction[j]     ### Taking a particular image from the batch
                 new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
-
-                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy().astype(np.uint8))
-
-                ### getting IoU of this particular image
-                res = metric(real_segmentation_img, new_img)
-
-                IoU[image_name[j]] = res
 
                 ### Now the new_img is PIL.Image
                 new_img.save(os.path.join(args.validation_dir+'/supervised/'+image_name[j]+'.png'))
@@ -63,7 +60,7 @@ def validation(args):
             
             print('Epoch-', str(i+1), ' Done!')
         
-        torch.save(IoU, os.path.join(args.validation_dir+'/supervised/'+'accuracy.ckpt'))
+        print('The iou of the resulting segment maps: ', str(best_iou))
 
 
     elif(args.model == 'semisupervised_cycleGAN'):
@@ -72,6 +69,7 @@ def validation(args):
         try:
             ckpt = utils.load_checkpoint('%s/latest_semisuper_cycleGAN.ckpt' % (args.checkpoint_dir))
             Gsi.load_state_dict(ckpt['Gsi'])
+            best_iou = ckpt['best_iou']
 
         except:
             print(' [*] No checkpoint!')
@@ -81,23 +79,17 @@ def validation(args):
         for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
             image_test = utils.cuda(image_test)
             seg_map = Gsi(image_test)
+            seg_map = activation_softmax(seg_map)
 
             prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
             for j in range(prediction.shape[0]):
                 new_img = prediction[j]     ### Taking a particular image from the batch
                 new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
 
-                real_segmentation_img = Image.fromarray(real_segmentation[j].squeeze_(0).cpu().numpy().astype(np.uint8))
-
-                ### getting IoU of this particular image
-                res = metric(real_segmentation_img, new_img)
-
-                IoU[image_name[j]] = res
-
                 ### Now the new_img is PIL.Image
                 new_img.save(os.path.join(args.validation_dir+'/unsupervised/'+image_name[j]+'.png'))
             
             print('Epoch-', str(i+1), ' Done!')
         
-        torch.save(IoU, os.path.join(args.validation_dir+'/unsupervised/'+'accuracy.ckpt'))
+        print('The iou of the resulting segment maps: ', str(best_iou))
         

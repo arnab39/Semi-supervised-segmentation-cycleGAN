@@ -5,6 +5,7 @@ import shutil
 import numpy as np
 import torch.nn as nn
 import torch
+from torch.autograd import Variable
 from PIL import Image
 
 
@@ -55,7 +56,7 @@ def smoothen_label(label, alpha, gpu_id):
     '''
     For smoothening of the classification labels
     
-    labels : tensor having dimensrions: batch_size*22*H*W filled with zeroes and ones
+    labels : tensor having dimensrions: batch_size*21*H*W filled with zeroes and ones
     '''
     torch.manual_seed(0)
     try:
@@ -219,7 +220,7 @@ def make_one_hot(labels, dataname, gpu_id):
     assert dataname in ('voc2012'), 'dataset name should be one of the following: \'voc2012\',given {}'.format(dataname)
 
     if dataname == 'voc2012':
-        C = 22
+        C = 21
     else:
         raise NotImplementedError
 
@@ -306,68 +307,6 @@ class averageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
-
-import numpy as np
-import torch
-from torch.autograd import Variable
-
-
-def _fast_hist(label_true, label_pred, n_class):
-    mask = (label_true >= 0) & (label_true < n_class)
-    hist = np.bincount(
-        n_class * label_true[mask].astype(int) +
-        label_pred[mask], minlength=n_class ** 2).reshape(n_class, n_class)
-    return hist
-
-
-def scores(label_trues, label_preds, n_class):
-    """Returns accuracy score evaluation result.
-      - overall accuracy
-      - mean accuracy
-      - mean IU
-      - fwavacc
-    """
-    hist = np.zeros((n_class, n_class))
-    for lt, lp in zip(label_trues, label_preds):
-        hist += _fast_hist(lt.flatten(), lp.flatten(), n_class)
-    acc = np.diag(hist).sum() / hist.sum()
-    acc_cls = np.diag(hist) / hist.sum(axis=1)
-    acc_cls = np.nanmean(acc_cls)
-    iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
-    mean_iu = np.nanmean(iu)
-    freq = hist.sum(axis=1) / hist.sum()
-    fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
-    cls_iu = dict(zip(range(n_class), iu))
-
-    return mean_iu, cls_iu
-
-
-def val(model, valoader, nclass=21, nogpu=False):
-    model.eval()
-    gts, preds = [], []
-    for img_id, (img, gt_mask, _) in enumerate(valoader):
-        gt_mask = gt_mask.numpy()[0]
-        if nogpu:
-            img = Variable(img, volatile=True)
-        else:
-            img = Variable(img.cuda(), volatile=True)
-        out_pred_map = model(img)
-
-        # Get hard prediction
-        if nogpu:
-            soft_pred = out_pred_map.data.numpy()[0]
-        else:
-            soft_pred = out_pred_map.data.cpu().numpy()[0]
-
-        soft_pred = soft_pred[:, :gt_mask.shape[0], :gt_mask.shape[1]]
-        hard_pred = np.argmax(soft_pred, axis=0).astype(np.uint8)
-        for gt_, pred_ in zip(gt_mask, hard_pred):
-            gts.append(gt_)
-            preds.append(pred_)
-    miou, _ = scores(gts, preds, n_class=nclass)
-    model.train()
-
-    return miou
 
 class LambdaLR():
     def __init__(self, epochs, offset, decay_epoch):

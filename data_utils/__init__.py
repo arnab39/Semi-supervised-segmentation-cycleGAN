@@ -25,8 +25,7 @@ def colormap(n):
 class Relabel:
     def __init__(self, olabel, nlabel):
         '''
-        Converts a particular label value in the tensor to another.
-        Used to convert the background color value to 21 in the case of voc dataset
+        Converts a particular label value in the tensor to another
 
         Parameters
         ----------
@@ -141,14 +140,14 @@ def get_transformation(size, resize=False):
             Resize(size),
             CenterCrop(size),
             ToLabel(),
-            Relabel(255, 21)    ## So as to replace the 255(boundaries) label as 21
+            Relabel(255, 0)    ## So as to replace the 255(boundaries) label as 0
         ])
 
     else:
         target_transform = Compose([
             CenterCrop(size),
             ToLabel(),
-            Relabel(255, 21)    ## So as to replace the 255(boundaries) label as 21
+            Relabel(255, 0)    ## So as to replace the 255(boundaries) label as 0
         ])
     
 
