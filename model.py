@@ -29,7 +29,7 @@ class supervised_model(object):
     def __init__(self, args):
 
         # Define the network 
-        self.Gsi = define_Gen(input_nc=3, output_nc=21, ngf=args.ngf, netG='resnet_9blocks_softmax', norm=args.norm,
+        self.Gsi = define_Gen(input_nc=3, output_nc=args.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax', norm=args.norm,
                               use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)  # for image to segmentation
 
         utils.print_networks([self.Gsi], ['Gsi'])
@@ -40,7 +40,7 @@ class supervised_model(object):
 
         ### writer for tensorboard
         self.writer_supervised = SummaryWriter(tensorboard_loc + '_supervised')
-        self.running_metrics_val = utils.runningScore(21)   ## Here 21 is the number of classes
+        self.running_metrics_val = utils.runningScore(args.n_channels)   ## Here are the number of classes in the output
 
         self.args = args
 
@@ -80,7 +80,7 @@ class supervised_model(object):
 
         for epoch in range(self.start_epoch, self.args.epochs):
             self.Gsi.train()
-            for i, (l_img, l_gt, _) in enumerate(labeled_loader):
+            for i, (l_img, l_gt, img_name) in enumerate(labeled_loader):
                 # step
                 step = epoch * len(labeled_loader) + i + 1
 
@@ -89,7 +89,8 @@ class supervised_model(object):
                 l_img, l_gt = utils.cuda([l_img, l_gt], args.gpu_ids)
 
                 lab_gt = self.Gsi(l_img)
-                #print(lab_gt.shape,lab_gt.max(),lab_gt.min())
+                print('The maximum of the l_gt: ',l_gt.max(),' and the minimum is: ',l_gt.min())
+                print('The labels name: ', img_name)
                 #l=l_gt.squeeze(1)
                 #print(l.shape,np.amax(l),np.amin(l))
                 #print(l.shape,l.unique(),l.min())
@@ -164,10 +165,10 @@ class semisuper_cycleGAN(object):
         # Define the network 
         #####################################################
         # for segmentaion to image
-        self.Gis = define_Gen(input_nc=21, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
+        self.Gis = define_Gen(input_nc=args.n_channels, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
         # for image to segmentation
-        self.Gsi = define_Gen(input_nc=3, output_nc=21, ngf=args.ngf, netG='resnet_9blocks_softmax',
+        self.Gsi = define_Gen(input_nc=3, output_nc=args.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax',
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
         self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD='pixel', n_layers_D=3,
                              norm=args.norm, gpu_ids=args.gpu_ids)
@@ -185,7 +186,7 @@ class semisuper_cycleGAN(object):
 
         ### Tensorboard writer
         self.writer_semisuper = SummaryWriter(tensorboard_loc + '_semisuper')
-        self.running_metrics_val = utils.runningScore(21)   ## Here 21 is the number of classes
+        self.running_metrics_val = utils.runningScore(args.n_channels)   ## Here 21 is the number of classes
 
         ### For adding gaussian noise
         self.gauss_noise = utils.GaussianNoise(sigma = 0.2)
@@ -434,8 +435,8 @@ class semisuper_cycleGAN(object):
 
                     # Update discriminators
                     ##################################################
-                    img_dis_loss.backward()
-                    gt_dis_loss.backward()
+                    discriminator_loss = args.discriminator_weight * (img_dis_loss + gt_dis_loss)
+                    discriminator_loss.backward()
 
                     ### To check the gradient norms
                     # Di_list = []

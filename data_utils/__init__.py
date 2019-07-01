@@ -137,7 +137,7 @@ def get_transformation(size, resize=False):
 
     if resize:
         target_transform = Compose([
-            Resize(size),
+            Resize(size, interpolation=0),
             CenterCrop(size),
             ToLabel(),
             Relabel(255, 0)    ## So as to replace the 255(boundaries) label as 0

@@ -52,7 +52,7 @@ class VOCDataset(Dataset):
         np.random.seed(1)  ### Because of this we are not getting repeated images for labelled and unlabelled data
 
         if self.name != 'test':
-            total_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainval.txt')).values.reshape(-1)
+            total_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainvalAug.txt')).values.reshape(-1)
         
             train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
         
@@ -96,7 +96,7 @@ class VOCDataset(Dataset):
 
         else:
             img_path = os.path.join(self.root_path, 'JPEGImages', self.imgs[index] + '.jpg')
-            gt_path = os.path.join(self.root_path, 'SegmentationClass', self.gts[index] + '.png')
+            gt_path = os.path.join(self.root_path, 'SegmentationClassAug', self.gts[index] + '.png')
 
             img = Image.open(img_path).convert('RGB')
             gt = Image.open(gt_path) #.convert('P')
