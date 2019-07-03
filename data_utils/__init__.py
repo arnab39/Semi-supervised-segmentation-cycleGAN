@@ -114,11 +114,13 @@ def PILaugment(img, mask):
     return img, mask
 
 
-def get_transformation(size, resize=False):
+def get_transformation(size, resize=False, dataset = 'voc2012'):
     '''
     Used to return a transformation based on the size given, that is, returns an apt sized tensor
     If resize = True then Resizing else CenterCrop
     '''
+
+    assert dataset in ['voc2012', 'cityscapes'], 'The dataset name must be set correctly in the get_transformation function'
     if resize:
         transfom_lst = [
             Resize(size),
@@ -135,21 +137,36 @@ def get_transformation(size, resize=False):
     
     input_transform = Compose(transfom_lst)
 
-    if resize:
-        target_transform = Compose([
-            Resize(size, interpolation=0),
-            CenterCrop(size),
-            ToLabel(),
-            Relabel(255, 0)    ## So as to replace the 255(boundaries) label as 0
-        ])
+    ### This is because we don't need the Relabel function for the case of cityscapes dataset
+    if dataset == 'voc2012':
+        if resize:
+            target_transform = Compose([
+                Resize(size, interpolation=0),
+                CenterCrop(size),
+                ToLabel(),
+                Relabel(255, 0)    ## So as to replace the 255(boundaries) label as 0
+            ])
 
-    else:
-        target_transform = Compose([
-            CenterCrop(size),
-            ToLabel(),
-            Relabel(255, 0)    ## So as to replace the 255(boundaries) label as 0
-        ])
+        else:
+            target_transform = Compose([
+                CenterCrop(size),
+                ToLabel(),
+                Relabel(255, 0)    ## So as to replace the 255(boundaries) label as 0
+            ])
+
+    elif dataset == 'cityscapes':
+        if resize:
+            target_transform = Compose([
+                Resize(size, interpolation=0),
+                CenterCrop(size),
+                ToLabel()
+            ])
+
+        else:
+            target_transform = Compose([
+                CenterCrop(size),
+                ToLabel(),
+            ])
     
-
     transform = {'img': input_transform, 'gt': target_transform}
     return transform

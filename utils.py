@@ -52,6 +52,49 @@ def PIL_to_tensor(img):
 
     return return_tensor
 
+def decode_cityscape_seg(temp):
+    '''
+    temp: It is a 1D segmentation map(H*W) which will be converted to 3D colored segmentation map
+    '''
+    n_classes = 20
+    colors = [
+        [128, 64, 128],
+        [244, 35, 232],
+        [70, 70, 70],
+        [102, 102, 156],
+        [190, 153, 153],
+        [153, 153, 153],
+        [250, 170, 30],
+        [220, 220, 0],
+        [107, 142, 35],
+        [152, 251, 152],
+        [0, 130, 180],
+        [220, 20, 60],
+        [255, 0, 0],
+        [0, 0, 142],
+        [0, 0, 70],
+        [0, 60, 100],
+        [0, 80, 100],
+        [0, 0, 230],
+        [119, 11, 32],
+        [0, 0, 0]
+    ]
+    label_colours = dict(zip(range(20), colors))
+
+    r = temp.copy()
+    g = temp.copy()
+    b = temp.copy()
+    for l in range(0, n_classes):
+        r[temp == l] = label_colours[l][0]
+        g[temp == l] = label_colours[l][1]
+        b[temp == l] = label_colours[l][2]
+
+    rgb = np.zeros((temp.shape[0], temp.shape[1], 3))
+    rgb[:, :, 0] = r / 255.0
+    rgb[:, :, 1] = g / 255.0
+    rgb[:, :, 2] = b / 255.0
+    return rgb
+
 def smoothen_label(label, alpha, gpu_id):
     '''
     For smoothening of the classification labels

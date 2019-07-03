@@ -13,12 +13,16 @@ from arch import define_Gen
 from data_utils import VOCDataset, get_transformation
 
 root = './data/VOC2012test/VOC2012'
+root_cityscapes = './data/Cityscape'
 
 def test(args):
-    transform = get_transformation((args.crop_height, args.crop_width), resize=True)
+    transform = get_transformation((args.crop_height, args.crop_width), resize=True, dataset=args.dataset)
 
     ## let the choice of dataset configurable
-    test_set = VOCDataset(root_path=root, name='test', ratio=0.5, transformation=transform, augmentation=None)
+    if args.dataset == 'voc2012':
+        test_set = VOCDataset(root_path=root, name='test', ratio=0.5, transformation=transform, augmentation=None)
+    elif args.dataset == 'cityscapes':
+        test_set = CityscapesDataset(root_path=root_cityscapes, name='test', ratio=0.5, transformation=transform, augmentation=None)
 
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False)
 

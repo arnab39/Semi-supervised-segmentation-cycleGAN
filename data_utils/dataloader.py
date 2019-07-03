@@ -47,7 +47,7 @@ class VOCDataset(Dataset):
         assert transformation is not None, 'transformation must be provided, give None'
         self.transformation = transformation
         self.augmentation = augmentation
-        assert name in ('label', 'unlabel','val', 'test'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % name
+        assert name in ('label', 'unlabel','val', 'test'), 'dataset name should be restricted in "label", "unlabel", "test" and "val", given %s' % name
         assert 0 <= ratio <= 1, 'the ratio between "labeled" and "unlabeled" should be between 0 and 1, given %.1f' % ratio
         np.random.seed(1)  ### Because of this we are not getting repeated images for labelled and unlabelled data
 
@@ -123,7 +123,7 @@ class CityscapesDataset(Dataset):
     https://github.com/fvisin/dataset_loaders/blob/master/dataset_loaders/images/cityscapes.py
     """
 
-    colors = [  # [  0,   0,   0],
+    colors = [
         [128, 64, 128],
         [244, 35, 232],
         [70, 70, 70],
@@ -143,58 +143,75 @@ class CityscapesDataset(Dataset):
         [0, 80, 100],
         [0, 0, 230],
         [119, 11, 32],
+        [0, 0, 0]
     ]
 
     label_colours = dict(zip(range(19), colors))
 
-    mean_rgb = {
-        "pascal": [103.939, 116.779, 123.68],
-        "cityscapes": [0.0, 0.0, 0.0],
-    }  # pascal mean for PSPNet and ICNet pre-trained model
+    split_ratio = [0.85, 0.15]
+    '''
+    this split ratio is for the train (including the labeled and unlabeled) and the val dataset
+    '''
 
     def __init__(
         self,
         root_path,
-        split="train",
-        is_transform=False,
-        img_size=(512, 1024),
-        augmentation=None,
-        img_norm=True,
-        version="cityscapes",
+        name="train",
+        ratio=0.5,
+        transformation=False,
+        augmentation=None
     ):
-        """__init__
-        :param root_path:
-        :param split:
-        :param is_transform:
-        :param img_size:
-        :param augmentations
-        """
         self.root = root_path
-        self.split = split
-        self.is_transform = is_transform
-        self.augmentations = augmentation
-        self.img_norm = img_norm
-        self.n_classes = 19
-        self.img_size = (
-            img_size if isinstance(img_size, tuple) else (img_size, img_size)
-        )
-        self.mean = np.array(self.mean_rgb[version])
+        self.name = name
+        assert transformation is not None, 'transformation must be provided, give None'
+        self.transformation = transformation
+        self.augmentation = augmentation
+        self.n_classes = 20
+        self.ratio = ratio
         self.files = {}
 
-        assert split in ('train', 'test',
-                         'val'), 'dataset name should be restricted in "label", "unlabeled" and "val", given %s' % split
+        assert name in ('label', 'unlabel','val', 'test'), 'dataset name should be restricted in "label", "unlabel", "test" and "val", given %s' % name
 
-        self.images_base = os.path.join(self.root, "leftImg8bit", self.split)
-        self.annotations_base = os.path.join(
-            self.root, "gtFine", self.split
-        )
+        if self.name != 'test':
+            self.images_base = os.path.join(self.root, "leftImg8bit", 'trainval')
+            self.annotations_base = os.path.join(
+                self.root, "gtFine", 'trainval'
+            )
+        else:
+            self.images_base = os.path.join(self.root, "leftImg8bit", 'test')
+            # self.annotations_base = os.path.join(
+            #     self.root, "gtFine", 'test'
+            # )
 
-        self.files[split] = recursive_glob(rootdir=self.images_base, suffix=".png")
+        np.random.seed(1) 
 
+        if self.name != 'test':
+            total_imgs = recursive_glob(rootdir=self.images_base, suffix=".png")
+            total_imgs = np.array(total_imgs)
+
+            train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
+            val_imgs = [x for x in total_imgs if x not in train_imgs]
+            labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
+            unlabeled_imgs = [x for x in train_imgs if x not in labeled_imgs]
+        else:
+            test_imgs = recursive_glob(rootdir=self.images_base, suffix=".png")
+
+        if(self.name == 'label'):
+            self.files[name] = list(labeled_imgs)
+        elif(self.name == 'unlabel'):
+            self.files[name] = list(unlabeled_imgs)
+        elif(self.name == 'val'):
+            self.files[name] = list(val_imgs)
+        elif(self.name == 'test'):
+            self.files[name] = list(test_imgs)
+        
+        '''
+        This pattern for the various classes has been borrowed from the official repo for Cityscapes dataset
+        You can see it here: https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/helpers/labels.py
+        '''
         self.void_classes = [0, 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 18, 29, 30, -1]
         self.valid_classes = [7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33]
         self.class_names = [
-            "unlabelled",
             "road",
             "sidewalk",
             "building",
@@ -214,81 +231,61 @@ class CityscapesDataset(Dataset):
             "train",
             "motorcycle",
             "bicycle",
+            "unlabelled"
         ]
 
         self.ignore_index = 250
         self.class_map = dict(zip(self.valid_classes, range(19)))
 
-        if not self.files[split]:
+        if not self.files[name]:
             raise Exception(
-                "No files for split=[%s] found in %s" % (split, self.images_base)
+                "No files for name=[%s] found in %s" % (name, self.images_base)
             )
 
-        print("Found %d %s images" % (len(self.files[split]), split))
+        print("Found %d %s images" % (len(self.files[name]), name))
 
     def __len__(self):
         """__len__"""
-        return len(self.files[self.split])
+        return len(self.files[self.name])
 
     def __getitem__(self, index):
         """__getitem__
         :param index:
         """
-        img_path = self.files[self.split][index].rstrip()
-        lbl_path = os.path.join(
-            self.annotations_base,
-            img_path.split(os.sep)[-2],
-            os.path.basename(img_path)[:-15] + "gtFine_labelIds.png",
-        )
+        if self.name == 'test':
+            img_path = self.files[self.name][index].rstrip()
 
-        img = m.imread(img_path)
-        img = np.array(img, dtype=np.uint8)
+            img = Image.open(img_path).convert('RGB')
 
-        lbl = m.imread(lbl_path)
-        lbl = self.encode_segmap(np.array(lbl, dtype=np.uint8))
+            if self.augmentation is not None:
+                img = self.augmentation(img)
 
-        if self.augmentations is not None:
-            img, lbl = self.augmentations(img, lbl)
+            if self.transformation:
+                img = self.transformation['img'](img)
 
-        if self.is_transform:
-            img, lbl = self.transform(img, lbl)
+            return img, img_path[34:]   ### These numbers have been hard coded so as to get a suitable name for the model
 
-        return img, lbl
+        else:
+            img_path = self.files[self.name][index].rstrip()
+            lbl_path = os.path.join(
+                self.annotations_base,
+                img_path.split(os.sep)[-2],
+                os.path.basename(img_path)[:-15] + "gtFine_labelIds.png",
+            )
 
-    def transform(self, img, lbl):
-        """transform
-        :param img:
-        :param lbl:
-        """
-        img = m.imresize(
-            img, (self.img_size[0], self.img_size[1])
-        )  # uint8 with RGB mode
-        img = img[:, :, ::-1]  # RGB -> BGR
-        img = img.astype(np.float64)
-        img -= self.mean
-        if self.img_norm:
-            # Resize scales images from 0 to 255, thus we need
-            # to divide by 255.0
-            img = img.astype(float) / 255.0
-        # NHWC -> NCHW
-        img = img.transpose(2, 0, 1)
+            img = Image.open(img_path).convert('RGB')
+            lbl = Image.open(lbl_path)
 
-        classes = np.unique(lbl)
-        lbl = lbl.astype(float)
-        lbl = m.imresize(lbl, (self.img_size[0], self.img_size[1]), "nearest", mode="F")
-        lbl = lbl.astype(int)
+            if self.augmentation is not None:
+                img, lbl = self.augmentation(img, lbl)
 
-        if not np.all(classes == np.unique(lbl)):
-            print("WARN: resizing labels yielded fewer classes")
+            if self.transformation:
+                img = self.transformation['img'](img)
+                lbl = self.transformation['gt'](lbl)
 
-        if not np.all(np.unique(lbl[lbl != self.ignore_index]) < self.n_classes):
-            print("after det", classes, np.unique(lbl))
-            raise ValueError("Segmentation map contained invalid class values")
+            lbl = self.encode_segmap(lbl)
 
-        img = torch.from_numpy(img).float()
-        lbl = torch.from_numpy(lbl).long()
-
-        return img, lbl
+            return img, lbl, img_path[38:]   ### These numbers have been hard coded so as to get a suitable name for the model
 
     def decode_segmap(self, temp):
         r = temp.copy()
@@ -306,10 +303,11 @@ class CityscapesDataset(Dataset):
         return rgb
 
     def encode_segmap(self, mask):
-        # Put all void classes to zero
+        # Put all void classes to ignore index
         for _voidc in self.void_classes:
             mask[mask == _voidc] = self.ignore_index
         for _validc in self.valid_classes:
             mask[mask == _validc] = self.class_map[_validc]
+        mask[mask == self.ignore_index] = 19   ### Just a mapping between the two color values
         return mask
 

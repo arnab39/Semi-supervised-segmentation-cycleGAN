@@ -20,7 +20,7 @@ Class for CycleGAN with train() as a member function
 
 '''
 root = './data/VOC2012'
-root_cityscapes = "Cityspaces"
+root_cityscapes = "./data/Cityscape"
 
 ### The location for tensorboard visualizations
 tensorboard_loc = './tensorboard_results/first_run'
@@ -60,7 +60,7 @@ class supervised_model(object):
 
     def train(self, args):
 
-        transform = get_transformation((self.args.crop_height, self.args.crop_width), resize=True)
+        transform = get_transformation((self.args.crop_height, self.args.crop_width), resize=True, dataset=args.dataset)
 
         # let the choice of dataset configurable
         if self.args.dataset == 'voc2012':
@@ -71,9 +71,12 @@ class supervised_model(object):
             labeled_loader = DataLoader(labeled_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
             val_loader = DataLoader(val_set, batch_size=self.args.batch_size, shuffle=True)
         elif self.args.dataset == 'cityscapes':
-            labeled_set = CityscapesDataset(root_path=root_cityscapes, split='train', is_transform=True,
+            labeled_set = CityscapesDataset(root_path=root_cityscapes, name='label', ratio=0.5, transformation=transform,
+                                            augmentation=None)
+            val_set = CityscapesDataset(root_path=root_cityscapes, name='val', ratio=0.5, transformation=transform,
                                             augmentation=None)
             labeled_loader = DataLoader(labeled_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
+            val_loader = DataLoader(val_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
 
         img_fake_sample = utils.Sample_from_Pool()
         gt_fake_sample = utils.Sample_from_Pool()
@@ -223,7 +226,7 @@ class semisuper_cycleGAN(object):
 
 
     def train(self, args):
-        transform = get_transformation((args.crop_height, args.crop_width), resize=True)
+        transform = get_transformation((args.crop_height, args.crop_width), resize=True, dataset=args.dataset)
 
         # let the choice of dataset configurable
         if self.args.dataset == 'voc2012':
@@ -234,12 +237,12 @@ class semisuper_cycleGAN(object):
             val_set = VOCDataset(root_path=root, name='val', ratio=0.5, transformation=transform,
                                  augmentation=None)
         elif self.args.dataset == 'cityscapes':
-            labeled_set = CityscapesDataset(root_path=root_cityscapes, split='train', is_transform=True,
+            labeled_set = CityscapesDataset(root_path=root_cityscapes, name='label', ratio=0.5, transformation=transform,
                                             augmentation=None)
-            unlabeled_set = CityscapesDataset(root_path=root_cityscapes, split='val', is_transform=True,
-                                              augmentation=None)
-            val_set = CityscapesDataset(root_path=root_cityscapes, split='test', is_transform=True,
-                                        augmentation=None)
+            unlabeled_set = CityscapesDataset(root_path=root_cityscapes, name='unlabel', ratio=0.5, transformation=transform,
+                                            augmentation=None)
+            val_set = CityscapesDataset(root_path=root_cityscapes, name='val', ratio=0.5, transformation=transform,
+                                            augmentation=None)
 
         assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
 
