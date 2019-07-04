@@ -92,8 +92,8 @@ class supervised_model(object):
                 l_img, l_gt = utils.cuda([l_img, l_gt], args.gpu_ids)
 
                 lab_gt = self.Gsi(l_img)
-                print('The maximum of the l_gt: ',l_gt.max(),' and the minimum is: ',l_gt.min())
-                print('The labels name: ', img_name)
+                # print('The maximum of the l_gt: ',l_gt.max(),' and the minimum is: ',l_gt.min())
+                # print('The labels name: ', img_name)
                 #l=l_gt.squeeze(1)
                 #print(l.shape,np.amax(l),np.amin(l))
                 #print(l.shape,l.unique(),l.min())
@@ -134,13 +134,14 @@ class supervised_model(object):
             fake = self.activation_softmax(fake)
             fake_prediction = fake.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()
             val_gt = val_gt.cpu()
+
             ### display_tensor is the final tensor that will be displayed on tensorboard
             display_tensor = torch.zeros([fake.shape[0], 3, fake.shape[2], fake.shape[3]])
             display_tensor_gt = torch.zeros([val_gt.shape[0], 3, val_gt.shape[2], val_gt.shape[3]])
             for i in range(fake_prediction.shape[0]):
                 new_img = fake_prediction[i]
-                new_img = utils.colorize_mask(new_img)   ### So this is the generated image in PIL.Image format
-                img_tensor = utils.PIL_to_tensor(new_img)
+                new_img = utils.colorize_mask(new_img, self.args.dataset)   ### So this is the generated image in PIL.Image format
+                img_tensor = utils.PIL_to_tensor(new_img, self.args.dataset)
                 display_tensor[i, :, :, :] = img_tensor
 
                 display_tensor_gt[i, :, :, :] = val_gt[i]
@@ -523,15 +524,15 @@ class semisuper_cycleGAN(object):
             display_tensor_regen_label = torch.zeros([fake_label_regenerated.shape[0], 3, fake_label_regenerated.shape[2], fake_label_regenerated.shape[3]])
             for i in range(fake_prediction_label.shape[0]):
                 new_img_label = fake_prediction_label[i]
-                new_img_label = utils.colorize_mask(new_img_label)   ### So this is the generated image in PIL.Image format
-                img_tensor_label = utils.PIL_to_tensor(new_img_label)
+                new_img_label = utils.colorize_mask(new_img_label, self.args.dataset)   ### So this is the generated image in PIL.Image format
+                img_tensor_label = utils.PIL_to_tensor(new_img_label, self.args.dataset)
                 display_tensor_label[i, :, :, :] = img_tensor_label
 
                 display_tensor_gt[i, :, :, :] = val_gt[i]
 
                 regen_label = fake_regenerated_label[i]
-                regen_label = utils.colorize_mask(regen_label)
-                regen_tensor_label = utils.PIL_to_tensor(regen_label)
+                regen_label = utils.colorize_mask(regen_label, self.args.dataset)
+                regen_tensor_label = utils.PIL_to_tensor(regen_label, self.args.dataset)
                 display_tensor_regen_label[i, :, :, :] = regen_tensor_label
 
             self.writer_semisuper.add_image('Generated segmented image: ', torchvision.utils.make_grid(display_tensor_label, nrow=2, normalize=True), epoch)

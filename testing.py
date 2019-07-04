@@ -52,7 +52,7 @@ def test(args):
             prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
             for j in range(prediction.shape[0]):
                 new_img = prediction[j]     ### Taking a particular image from the batch
-                new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
+                new_img = utils.colorize_mask(new_img, args.dataset)   ### So as to convert it back to a paletted image
 
                 ### Now the new_img is PIL.Image
                 new_img.save(os.path.join(args.results_dir+'/supervised/'+image_name[j]+'.png'))
@@ -80,7 +80,7 @@ def test(args):
             prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
             for j in range(prediction.shape[0]):
                 new_img = prediction[j]     ### Taking a particular image from the batch
-                new_img = utils.colorize_mask(new_img)   ### So as to convert it back to a paletted image
+                new_img = utils.colorize_mask(new_img, args.dataset)   ### So as to convert it back to a paletted image
 
                 ### Now the new_img is PIL.Image
                 new_img.save(os.path.join(args.results_dir+'/unsupervised/'+image_name[j]+'.png'))
