@@ -245,7 +245,7 @@ class semisuper_cycleGAN(object):
             val_set = CityscapesDataset(root_path=root_cityscapes, name='val', ratio=0.5, transformation=transform,
                                             augmentation=None)
 
-        assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
+        # assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
 
         '''
         https://discuss.pytorch.org/t/about-the-relation-between-batch-size-and-length-of-data-loader/10510

@@ -59,8 +59,23 @@ class VOCDataset(Dataset):
             val_imgs = [x for x in total_imgs if x not in train_imgs]
         
             labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
+            labeled_imgs = list(labeled_imgs)
         
             unlabeled_imgs = [x for x in train_imgs if x not in labeled_imgs]
+
+            ### Now here we equalize the lengths of labelled and unlabelled imgs by just repeating up some images
+            if self.ratio > 0.5:
+                new_ratio = round((self.ratio/(1-self.ratio)), 1)
+                excess_ratio = new_ratio - 1
+                new_list_1 = unlabeled_imgs * int(excess_ratio)
+                new_list_2 = list(np.random.choice(np.array(unlabeled_imgs), size=int((excess_ratio - int(excess_ratio))*unlabeled_imgs.__len__()), replace=False))
+                unlabeled_imgs += (new_list_1 + new_list_2)
+            elif self.ratio < 0.5:
+                new_ratio = round(((1-self.ratio)/self.ratio), 1)
+                excess_ratio = new_ratio - 1
+                new_list_1 = labeled_imgs * int(excess_ratio)
+                new_list_2 = list(np.random.choice(np.array(labeled_imgs), size=int((excess_ratio - int(excess_ratio))*labeled_imgs.__len__()), replace=False))
+                labeled_imgs += (new_list_1 + new_list_2)
 
         if self.name == 'test':
             test_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'test.txt')).values.reshape(-1)
@@ -191,8 +206,26 @@ class CityscapesDataset(Dataset):
 
             train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
             val_imgs = [x for x in total_imgs if x not in train_imgs]
+            
             labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
+            labeled_imgs = list(labeled_imgs)
+
             unlabeled_imgs = [x for x in train_imgs if x not in labeled_imgs]
+
+            ### Now here we equalize the lengths of labelled and unlabelled imgs by just repeating up some images
+            if self.ratio > 0.5:
+                new_ratio = round((self.ratio/(1-self.ratio)), 1)
+                excess_ratio = new_ratio - 1
+                new_list_1 = unlabeled_imgs * int(excess_ratio)
+                new_list_2 = list(np.random.choice(np.array(unlabeled_imgs), size=int((excess_ratio - int(excess_ratio))*unlabeled_imgs.__len__()), replace=False))
+                unlabeled_imgs += (new_list_1 + new_list_2)
+            elif self.ratio < 0.5:
+                new_ratio = round(((1-self.ratio)/self.ratio), 1)
+                excess_ratio = new_ratio - 1
+                new_list_1 = labeled_imgs * int(excess_ratio)
+                new_list_2 = list(np.random.choice(np.array(labeled_imgs), size=int((excess_ratio - int(excess_ratio))*labeled_imgs.__len__()), replace=False))
+                labeled_imgs += (new_list_1 + new_list_2)
+
         else:
             test_imgs = recursive_glob(rootdir=self.images_base, suffix=".png")
 

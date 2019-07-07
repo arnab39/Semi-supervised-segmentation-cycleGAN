@@ -10,7 +10,7 @@ from validation import validation
 def get_args():
     parser = ArgumentParser(description='cycleGAN PyTorch')
     parser.add_argument('--epochs', type=int, default=400)
-    parser.add_argument('--n_channels', type=int, default=21)
+    parser.add_argument('--n_channels', type=int, default=20)
     parser.add_argument('--decay_epoch', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=5)
     parser.add_argument('--lr', type=float, default=.0002)
@@ -18,7 +18,7 @@ def get_args():
     parser.add_argument('--load_width', type=int, default=286)
     parser.add_argument('--gpu_ids', type=str, default='0')
     parser.add_argument('--crop_height', type=int, default=128)
-    parser.add_argument('--crop_width', type=int, default=128)
+    parser.add_argument('--crop_width', type=int, default=256)
     parser.add_argument('--lamda_img', type=int, default=1)
     parser.add_argument('--lamda_gt', type=int, default=0.05)
     parser.add_argument('--idt_coef', type=float, default=0.5)

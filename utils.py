@@ -239,10 +239,12 @@ def make_one_hot(labels, dataname, gpu_id):
     target : torch.autograd.Variable of torch.cuda.FloatTensor
         N x C x H x W, where C is class number. One-hot encoded.
     '''
-    assert dataname in ('voc2012'), 'dataset name should be one of the following: \'voc2012\',given {}'.format(dataname)
+    assert dataname in ('voc2012', 'cityscapes'), 'dataset name should be one of the following: \'voc2012\',given {}'.format(dataname)
 
     if dataname == 'voc2012':
         C = 21
+    elif dataname == 'cityscapes':
+        C = 20
     else:
         raise NotImplementedError
 
