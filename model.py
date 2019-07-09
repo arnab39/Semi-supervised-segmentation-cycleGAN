@@ -48,7 +48,7 @@ class supervised_model(object):
 
         ### writer for tensorboard
         self.writer_supervised = SummaryWriter(tensorboard_loc + '_supervised')
-        self.running_metrics_val = utils.runningScore(self.n_channels)   ## Here are the number of classes in the output
+        self.running_metrics_val = utils.runningScore(self.n_channels, args.dataset)
 
         self.args = args
 
@@ -212,7 +212,7 @@ class semisuper_cycleGAN(object):
 
         ### Tensorboard writer
         self.writer_semisuper = SummaryWriter(tensorboard_loc + '_semisuper')
-        self.running_metrics_val = utils.runningScore(self.n_channels)   ## Here 21 is the number of classes
+        self.running_metrics_val = utils.runningScore(self.n_channels, args.dataset)
 
         ### For adding gaussian noise
         self.gauss_noise = utils.GaussianNoise(sigma = 0.2)

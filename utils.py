@@ -282,9 +282,10 @@ def make_one_hot(labels, dataname, gpu_id):
 
 
 class runningScore(object):
-    def __init__(self, n_classes):
+    def __init__(self, n_classes, dataset):
         self.n_classes = n_classes
         self.confusion_matrix = np.zeros((n_classes, n_classes))
+        self.dataset = dataset
 
     def _fast_hist(self, label_true, label_pred, n_class):
         mask = (label_true >= 0) & (label_true < n_class)
@@ -311,17 +312,24 @@ class runningScore(object):
         acc = np.diag(hist).sum() / hist.sum()
         acc_cls = np.diag(hist) / hist.sum(axis=1)
         acc_cls = np.nanmean(acc_cls)
-        iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
+        if self.dataset == 'voc2012':
+            iu = np.diag(hist[1:self.n_classes, 1:self.n_classes]) / (hist[1:self.n_classes, 1:self.n_classes].sum(axis=1) + hist[1:self.n_classes, 1:self.n_classes].sum(axis=0) - np.diag(hist[1:self.n_classes, 1:self.n_classes]))
+        elif self.dataset == 'cityscapes':
+            iu = np.diag(hist[0:self.n_classes-1, 0:self.n_classes-1]) / (hist[0:self.n_classes-1, 0:self.n_classes-1].sum(axis=1) + hist[0:self.n_classes-1, 0:self.n_classes-1].sum(axis=0) - np.diag(hist[0:self.n_classes-1, 0:self.n_classes-1]))
+        elif self.dataset == 'acdc':
+            iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
         mean_iu = np.nanmean(iu)
-        freq = hist.sum(axis=1) / hist.sum()
-        fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
-        cls_iu = dict(zip(range(self.n_classes), iu))
+        # freq = hist.sum(axis=1) / hist.sum()
+        # fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
+        if self.dataset == 'voc2012' or self.dataset == 'cityscapes':
+            cls_iu = dict(zip(range(self.n_classes-1), iu))
+        elif self.dataset == 'acdc':
+            cls_iu = dict(zip(range(self.n_classes), iu))
 
         return (
             {
                 "Overall Acc: \t": acc,
                 "Mean Acc : \t": acc_cls,
-                "FreqW Acc : \t": fwavacc,
                 "Mean IoU : \t": mean_iu,
             },
             cls_iu,
