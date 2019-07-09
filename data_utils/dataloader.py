@@ -65,13 +65,13 @@ class VOCDataset(Dataset):
 
             ### Now here we equalize the lengths of labelled and unlabelled imgs by just repeating up some images
             if self.ratio > 0.5:
-                new_ratio = round((self.ratio/(1-self.ratio)), 1)
+                new_ratio = round((self.ratio/(1-self.ratio + 1e-6)), 1)
                 excess_ratio = new_ratio - 1
                 new_list_1 = unlabeled_imgs * int(excess_ratio)
                 new_list_2 = list(np.random.choice(np.array(unlabeled_imgs), size=int((excess_ratio - int(excess_ratio))*unlabeled_imgs.__len__()), replace=False))
                 unlabeled_imgs += (new_list_1 + new_list_2)
             elif self.ratio < 0.5:
-                new_ratio = round(((1-self.ratio)/self.ratio), 1)
+                new_ratio = round(((1-self.ratio)/(self.ratio + 1e-6)), 1)
                 excess_ratio = new_ratio - 1
                 new_list_1 = labeled_imgs * int(excess_ratio)
                 new_list_2 = list(np.random.choice(np.array(labeled_imgs), size=int((excess_ratio - int(excess_ratio))*labeled_imgs.__len__()), replace=False))
@@ -214,13 +214,13 @@ class CityscapesDataset(Dataset):
 
             ### Now here we equalize the lengths of labelled and unlabelled imgs by just repeating up some images
             if self.ratio > 0.5:
-                new_ratio = round((self.ratio/(1-self.ratio)), 1)
+                new_ratio = round((self.ratio/(1-self.ratio + 1e-6)), 1)
                 excess_ratio = new_ratio - 1
                 new_list_1 = unlabeled_imgs * int(excess_ratio)
                 new_list_2 = list(np.random.choice(np.array(unlabeled_imgs), size=int((excess_ratio - int(excess_ratio))*unlabeled_imgs.__len__()), replace=False))
                 unlabeled_imgs += (new_list_1 + new_list_2)
             elif self.ratio < 0.5:
-                new_ratio = round(((1-self.ratio)/self.ratio), 1)
+                new_ratio = round(((1-self.ratio)/(self.ratio + 1e-6)), 1)
                 excess_ratio = new_ratio - 1
                 new_list_1 = labeled_imgs * int(excess_ratio)
                 new_list_2 = list(np.random.choice(np.array(labeled_imgs), size=int((excess_ratio - int(excess_ratio))*labeled_imgs.__len__()), replace=False))
@@ -390,13 +390,13 @@ class ACDCDataset(Dataset):
 
             ### Now here we equalize the lengths of labelled and unlabelled imgs by just repeating up some images
             if self.ratio > 0.5:
-                new_ratio = round((self.ratio/(1-self.ratio)), 1)
+                new_ratio = round((self.ratio/(1-self.ratio + 1e-6)), 1)
                 excess_ratio = new_ratio - 1
                 new_list_1 = unlabeled_imgs * int(excess_ratio)
                 new_list_2 = list(np.random.choice(np.array(unlabeled_imgs), size=int((excess_ratio - int(excess_ratio))*unlabeled_imgs.__len__()), replace=False))
                 unlabeled_imgs += (new_list_1 + new_list_2)
             elif self.ratio < 0.5:
-                new_ratio = round(((1-self.ratio)/self.ratio), 1)
+                new_ratio = round(((1-self.ratio)/(self.ratio + 1e-6)), 1)
                 excess_ratio = new_ratio - 1
                 new_list_1 = labeled_imgs * int(excess_ratio)
                 new_list_2 = list(np.random.choice(np.array(labeled_imgs), size=int((excess_ratio - int(excess_ratio))*labeled_imgs.__len__()), replace=False))
