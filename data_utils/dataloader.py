@@ -296,7 +296,7 @@ class CityscapesDataset(Dataset):
             if self.transformation:
                 img = self.transformation['img'](img)
 
-            return img, img_path[34:]   ### These numbers have been hard coded so as to get a suitable name for the model
+            return img, img_path[34:].rstrip('.png')   ### These numbers have been hard coded so as to get a suitable name for the model
 
         else:
             img_path = self.files[self.name][index].rstrip()
@@ -318,7 +318,7 @@ class CityscapesDataset(Dataset):
 
             lbl = self.encode_segmap(lbl)
 
-            return img, lbl, img_path[38:]   ### These numbers have been hard coded so as to get a suitable name for the model
+            return img, lbl, img_path[38:].rstrip('.png')   ### These numbers have been hard coded so as to get a suitable name for the model
 
     def decode_segmap(self, temp):
         r = temp.copy()
@@ -344,3 +344,116 @@ class CityscapesDataset(Dataset):
         mask[mask == self.ignore_index] = 19   ### Just a mapping between the two color values
         return mask
 
+
+class ACDCDataset(Dataset):
+    '''
+    The dataloader for ACDC dataset
+    '''
+
+    split_ratio = [0.85, 0.15]
+    '''
+    this split ratio is for the train (including the labeled and unlabeled) and the val dataset
+    '''
+
+    def __init__(self, root_path, name='label', ratio=0.5, transformation=None, augmentation=None):
+        super(ACDCDataset, self).__init__()
+        self.root = root_path
+        self.name = name
+        assert transformation is not None, 'transformation must be provided, give None'
+        self.transformation = transformation
+        self.augmentation = augmentation
+        self.ratio = ratio
+        self.files = {}
+
+        if self.name != 'test':
+            self.images_base = os.path.join(self.root, 'training')
+            self.annotations_base = os.path.join(self.root, 'training_gt')
+        else:
+            self.images_base = os.path.join(self.root, 'testing')
+            # self.annotations_base = os.path.join(
+            #     self.root, "gtFine", 'test'
+            # )
+
+        np.random.seed(1) 
+
+        if self.name != 'test':
+            total_imgs = os.listdir(self.images_base)
+            total_imgs = np.array(total_imgs)
+
+            train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
+            val_imgs = [x for x in total_imgs if x not in train_imgs]
+            
+            labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
+            labeled_imgs = list(labeled_imgs)
+
+            unlabeled_imgs = [x for x in train_imgs if x not in labeled_imgs]
+
+            ### Now here we equalize the lengths of labelled and unlabelled imgs by just repeating up some images
+            if self.ratio > 0.5:
+                new_ratio = round((self.ratio/(1-self.ratio)), 1)
+                excess_ratio = new_ratio - 1
+                new_list_1 = unlabeled_imgs * int(excess_ratio)
+                new_list_2 = list(np.random.choice(np.array(unlabeled_imgs), size=int((excess_ratio - int(excess_ratio))*unlabeled_imgs.__len__()), replace=False))
+                unlabeled_imgs += (new_list_1 + new_list_2)
+            elif self.ratio < 0.5:
+                new_ratio = round(((1-self.ratio)/self.ratio), 1)
+                excess_ratio = new_ratio - 1
+                new_list_1 = labeled_imgs * int(excess_ratio)
+                new_list_2 = list(np.random.choice(np.array(labeled_imgs), size=int((excess_ratio - int(excess_ratio))*labeled_imgs.__len__()), replace=False))
+                labeled_imgs += (new_list_1 + new_list_2)
+
+        else:
+            test_imgs = os.listdir(self.images_base)
+
+        if(self.name == 'label'):
+            self.files[name] = list(labeled_imgs)
+        elif(self.name == 'unlabel'):
+            self.files[name] = list(unlabeled_imgs)
+        elif(self.name == 'val'):
+            self.files[name] = list(val_imgs)
+        elif(self.name == 'test'):
+            self.files[name] = list(test_imgs)
+
+        if not self.files[name]:
+            raise Exception(
+                "No files for name=[%s] found in %s" % (name, self.images_base)
+            )
+
+        print("Found %d %s images" % (len(self.files[name]), name))
+
+    def __len__(self):
+        """__len__"""
+        return len(self.files[self.name])
+
+    def __getitem__(self, index):
+        """__getitem__
+        :param index:
+        """
+        if self.name == 'test':
+            img_path = os.path.join(self.images_base, self.files[self.name][index])
+
+            img = Image.open(img_path)
+
+            if self.augmentation is not None:
+                img = self.augmentation(img)
+
+            if self.transformation:
+                img = self.transformation['img'](img)
+
+            return img, self.files[self.name][index].rstrip('.jpg') 
+
+        else:
+            img_path = os.path.join(self.images_base, self.files[self.name][index])
+            lbl_path = os.path.join(self.annotations_base, self.files[self.name][index].rstrip('.jpg') + '.png')
+
+            img = Image.open(img_path)
+            lbl = Image.open(lbl_path)
+
+            if self.augmentation is not None:
+                img, lbl = self.augmentation(img, lbl)
+
+            if self.transformation:
+                img = self.transformation['img'](img)
+                lbl = self.transformation['gt'](lbl)
+
+            return img, lbl, self.files[self.name][index].rstrip('.jpg')  

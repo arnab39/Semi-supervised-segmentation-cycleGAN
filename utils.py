@@ -20,6 +20,8 @@ cityscape_palette = [128, 64, 128, 244, 35, 232, 70, 70, 70, 102, 102, 156, 190,
                       250, 170, 30, 220, 220, 0, 107, 142, 35, 152, 251, 152, 0, 130, 180, 220, 20, 60,
                       255, 0, 0, 0, 0, 142, 0, 0, 70, 0, 60, 100, 0, 80, 100, 0, 0, 230, 119, 11, 32]
 
+acdc_palette = [0, 0, 0, 128, 64, 128, 70, 70, 70, 250, 170, 30]
+
 zero_pad = 256 * 3 - len(palette)
 for i in range(zero_pad):
     palette.append(0)
@@ -28,18 +30,24 @@ zero_pad = 256 * 3 - len(cityscape_palette)
 for i in range(zero_pad):
     cityscape_palette.append(0)
 
+zero_pad = 256 * 3 - len(acdc_palette)
+for i in range(zero_pad):
+    acdc_palette.append(0)
+
 
 def colorize_mask(mask, dataset):
     '''
     Used to convert the segmentation of one channel(mask) back to a paletted image
     '''
     # mask: numpy array of the mask
-    assert dataset in ('voc2012', 'cityscapes')
+    assert dataset in ('voc2012', 'cityscapes', 'acdc')
     new_mask = Image.fromarray(mask.astype(np.uint8)).convert('P')
     if (dataset == 'voc2012'):
         new_mask.putpalette(palette)
     elif (dataset == 'cityscapes'):
         new_mask.putpalette(cityscape_palette)
+    elif (dataset == 'acdc'):
+        new_mask.putpalette(acdc_palette)
 
     return new_mask
 
@@ -49,7 +57,7 @@ def PIL_to_tensor(img, dataset):
     '''
     Here img is of the type PIL.Image
     '''
-    assert dataset in ('voc2012', 'cityscapes')
+    assert dataset in ('voc2012', 'cityscapes', 'acdc')
     img_arr = np.array(img, dtype='float32')
     new_arr = np.zeros([3, img_arr.shape[0], img_arr.shape[1]], dtype='float32')
 
@@ -69,6 +77,14 @@ def PIL_to_tensor(img, dataset):
                 new_arr[0, i, j] = cityscape_palette[index]
                 new_arr[1, i, j] = cityscape_palette[index+1]
                 new_arr[2, i, j] = cityscape_palette[index+2]
+    elif (dataset == 'acdc'):
+        for i in range(img_arr.shape[0]):
+            for j in range(img_arr.shape[1]):
+                # new_arr[i, :, :] = img_arr
+                index = int(img_arr[i, j]*3)
+                new_arr[0, i, j] = acdc_palette[index]
+                new_arr[1, i, j] = acdc_palette[index+1]
+                new_arr[2, i, j] = acdc_palette[index+2]
     
     return_tensor = torch.tensor(new_arr)
 
@@ -239,12 +255,14 @@ def make_one_hot(labels, dataname, gpu_id):
     target : torch.autograd.Variable of torch.cuda.FloatTensor
         N x C x H x W, where C is class number. One-hot encoded.
     '''
-    assert dataname in ('voc2012', 'cityscapes'), 'dataset name should be one of the following: \'voc2012\',given {}'.format(dataname)
+    assert dataname in ('voc2012', 'cityscapes', 'acdc'), 'dataset name should be one of the following: \'voc2012\',given {}'.format(dataname)
 
     if dataname == 'voc2012':
         C = 21
     elif dataname == 'cityscapes':
         C = 20
+    elif dataname == 'acdc':
+        C = 4
     else:
         raise NotImplementedError
 

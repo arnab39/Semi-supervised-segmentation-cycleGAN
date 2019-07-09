@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import random
 from PIL import ImageOps, ImageFilter, ImageEnhance
-from .dataloader import VOCDataset, CityscapesDataset
+from .dataloader import VOCDataset, CityscapesDataset, ACDCDataset
 
 
 def colormap(n):
@@ -120,20 +120,35 @@ def get_transformation(size, resize=False, dataset = 'voc2012'):
     If resize = True then Resizing else CenterCrop
     '''
 
-    assert dataset in ['voc2012', 'cityscapes'], 'The dataset name must be set correctly in the get_transformation function'
-    if resize:
-        transfom_lst = [
-            Resize(size),
-            CenterCrop(size),
-            ToTensor(),
-            Normalize([.5, .5, .5], [.5, .5, .5])
-        ]
-    else:
-        transfom_lst = [
-            CenterCrop(size),
-            ToTensor(),
-            Normalize([.5, .5, .5], [.5, .5, .5])
-        ]
+    assert dataset in ['voc2012', 'cityscapes', 'acdc'], 'The dataset name must be set correctly in the get_transformation function'
+    if dataset == 'voc2012' or dataset == 'cityscapes':
+        if resize:
+            transfom_lst = [
+                Resize(size),
+                CenterCrop(size),
+                ToTensor(),
+                Normalize([.5, .5, .5], [.5, .5, .5])
+            ]
+        else:
+            transfom_lst = [
+                CenterCrop(size),
+                ToTensor(),
+                Normalize([.5, .5, .5], [.5, .5, .5])
+            ]
+    elif dataset == 'acdc':
+        if resize:
+            transfom_lst = [
+                Resize(size),
+                CenterCrop(size),
+                ToTensor(),
+                Normalize([.5], [.5])
+            ]
+        else:
+            transfom_lst = [
+                CenterCrop(size),
+                ToTensor(),
+                Normalize([.5], [.5])
+            ]
     
     input_transform = Compose(transfom_lst)
 
@@ -154,7 +169,7 @@ def get_transformation(size, resize=False, dataset = 'voc2012'):
                 Relabel(255, 0)    ## So as to replace the 255(boundaries) label as 0
             ])
 
-    elif dataset == 'cityscapes':
+    elif dataset == 'cityscapes' or dataset == 'acdc':
         if resize:
             target_transform = Compose([
                 Resize(size, interpolation=0),

@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import utils
 from arch import define_Gen, define_Dis, set_grad
-from data_utils import VOCDataset, CityscapesDataset, get_transformation
+from data_utils import VOCDataset, CityscapesDataset, ACDCDataset, get_transformation
 from utils import make_one_hot
 from tensorboardX import SummaryWriter
 
@@ -21,6 +21,7 @@ Class for CycleGAN with train() as a member function
 '''
 root = './data/VOC2012'
 root_cityscapes = "./data/Cityscape"
+root_acdc = './data/ACDC'
 
 ### The location for tensorboard visualizations
 tensorboard_loc = './tensorboard_results/first_run'
@@ -28,8 +29,15 @@ tensorboard_loc = './tensorboard_results/first_run'
 class supervised_model(object):
     def __init__(self, args):
 
+        if args.dataset == 'voc2012':
+            self.n_channels = 21
+        elif args.dataset == 'cityscapes':
+            self.n_channels = 20
+        elif args.dataset == 'acdc':
+            self.n_channels = 4
+
         # Define the network 
-        self.Gsi = define_Gen(input_nc=3, output_nc=args.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax', norm=args.norm,
+        self.Gsi = define_Gen(input_nc=3, output_nc=self.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax', norm=args.norm,
                               use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)  # for image to segmentation
 
         utils.print_networks([self.Gsi], ['Gsi'])
@@ -40,7 +48,7 @@ class supervised_model(object):
 
         ### writer for tensorboard
         self.writer_supervised = SummaryWriter(tensorboard_loc + '_supervised')
-        self.running_metrics_val = utils.runningScore(args.n_channels)   ## Here are the number of classes in the output
+        self.running_metrics_val = utils.runningScore(self.n_channels)   ## Here are the number of classes in the output
 
         self.args = args
 
@@ -74,6 +82,13 @@ class supervised_model(object):
             labeled_set = CityscapesDataset(root_path=root_cityscapes, name='label', ratio=0.5, transformation=transform,
                                             augmentation=None)
             val_set = CityscapesDataset(root_path=root_cityscapes, name='val', ratio=0.5, transformation=transform,
+                                            augmentation=None)
+            labeled_loader = DataLoader(labeled_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
+            val_loader = DataLoader(val_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
+        elif self.args.dataset == 'acdc':
+            labeled_set = ACDCDataset(root_path=root_acdc, name='label', ratio=0.5, transformation=transform,
+                                            augmentation=None)
+            val_set = ACDCDataset(root_path=root_acdc, name='val', ratio=0.5, transformation=transform,
                                             augmentation=None)
             labeled_loader = DataLoader(labeled_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
             val_loader = DataLoader(val_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
@@ -166,13 +181,20 @@ class supervised_model(object):
 class semisuper_cycleGAN(object):
     def __init__(self, args):
 
+        if args.dataset == 'voc2012':
+            self.n_channels = 21
+        elif args.dataset == 'cityscapes':
+            self.n_channels = 20
+        elif args.dataset == 'acdc':
+            self.n_channels = 4
+
         # Define the network 
         #####################################################
         # for segmentaion to image
-        self.Gis = define_Gen(input_nc=args.n_channels, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
+        self.Gis = define_Gen(input_nc=self.n_channels, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
         # for image to segmentation
-        self.Gsi = define_Gen(input_nc=3, output_nc=args.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax',
+        self.Gsi = define_Gen(input_nc=3, output_nc=self.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax',
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
         self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD='pixel', n_layers_D=3,
                              norm=args.norm, gpu_ids=args.gpu_ids)
@@ -190,7 +212,7 @@ class semisuper_cycleGAN(object):
 
         ### Tensorboard writer
         self.writer_semisuper = SummaryWriter(tensorboard_loc + '_semisuper')
-        self.running_metrics_val = utils.runningScore(args.n_channels)   ## Here 21 is the number of classes
+        self.running_metrics_val = utils.runningScore(self.n_channels)   ## Here 21 is the number of classes
 
         ### For adding gaussian noise
         self.gauss_noise = utils.GaussianNoise(sigma = 0.2)
@@ -243,6 +265,13 @@ class semisuper_cycleGAN(object):
             unlabeled_set = CityscapesDataset(root_path=root_cityscapes, name='unlabel', ratio=0.5, transformation=transform,
                                             augmentation=None)
             val_set = CityscapesDataset(root_path=root_cityscapes, name='val', ratio=0.5, transformation=transform,
+                                            augmentation=None)
+        elif self.args.dataset == 'acdc':
+            labeled_set = ACDCDataset(root_path=root_acdc, name='label', ratio=0.5, transformation=transform,
+                                            augmentation=None)
+            unlabeled_set = ACDCDataset(root_path=root_acdc, name='unlabel', ratio=0.5, transformation=transform,
+                                            augmentation=None)
+            val_set = ACDCDataset(root_path=root_acdc, name='val', ratio=0.5, transformation=transform,
                                             augmentation=None)
 
         # assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
@@ -512,11 +541,19 @@ class semisuper_cycleGAN(object):
             fake_img = fake_img.cpu()
             fake_img_from_labels = fake_img_from_labels.cpu()
             ### Now i am going to revert back the transformation on these images
-            trans_mean = [0.5, 0.5, 0.5]
-            trans_std = [0.5, 0.5, 0.5]
-            for i in range(3):
-                fake_img[:, i, :, :] = ((fake_img[:, i, :, :] * trans_std[i]) + trans_mean[i])
-                fake_img_from_labels[:, i, :, :] = ((fake_img_from_labels[:, i, :, :] * trans_std[i]) + trans_mean[i])
+            if self.args.dataset == 'voc2012' or self.args.dataset == 'cityscapes':
+                trans_mean = [0.5, 0.5, 0.5]
+                trans_std = [0.5, 0.5, 0.5]
+                for i in range(3):
+                    fake_img[:, i, :, :] = ((fake_img[:, i, :, :] * trans_std[i]) + trans_mean[i])
+                    fake_img_from_labels[:, i, :, :] = ((fake_img_from_labels[:, i, :, :] * trans_std[i]) + trans_mean[i])
+            
+            elif self.args.dataset == 'acdc':
+                trans_mean = [0.5]
+                trans_std = [0.5]
+                for i in range(1):
+                    fake_img[:, i, :, :] = ((fake_img[:, i, :, :] * trans_std[i]) + trans_mean[i])
+                    fake_img_from_labels[:, i, :, :] = ((fake_img_from_labels[:, i, :, :] * trans_std[i]) + trans_mean[i])
 
             ### display_tensor is the final tensor that will be displayed on tensorboard
             display_tensor_label = torch.zeros([fake_label.shape[0], 3, fake_label.shape[2], fake_label.shape[3]])
