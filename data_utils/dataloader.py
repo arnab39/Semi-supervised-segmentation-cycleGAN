@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 from utils import recursive_glob
 from PIL import Image
 from .augmentations import *
+import re
 
 
 class VOCDataset(Dataset):
@@ -296,7 +297,7 @@ class CityscapesDataset(Dataset):
             if self.transformation:
                 img = self.transformation['img'](img)
 
-            return img, img_path[34:].rstrip('.png')   ### These numbers have been hard coded so as to get a suitable name for the model
+            return img, re.sub(r'.*/', '', img_path[34:]).rstrip('.png')   ### These numbers have been hard coded so as to get a suitable name for the model
 
         else:
             img_path = self.files[self.name][index].rstrip()
@@ -318,7 +319,7 @@ class CityscapesDataset(Dataset):
 
             lbl = self.encode_segmap(lbl)
 
-            return img, lbl, img_path[38:].rstrip('.png')   ### These numbers have been hard coded so as to get a suitable name for the model
+            return img, lbl, re.sub(r'.*/', '', img_path[38:]).rstrip('.png')   ### These numbers have been hard coded so as to get a suitable name for the model
 
     def decode_segmap(self, temp):
         r = temp.copy()

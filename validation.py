@@ -10,12 +10,22 @@ import torchvision.transforms as transforms
 import utils
 from PIL import Image
 from arch import define_Gen
-from data_utils import VOCDataset, get_transformation
+from data_utils import VOCDataset, CityscapesDataset, ACDCDataset, get_transformation
 
 root = './data/VOC2012'
 root_cityscapes = './data/Cityscape'
+root_acdc = './data/ACDC'
 
 def validation(args):
+
+    ### For selecting the number of channels
+    if args.dataset == 'voc2012':
+        n_channels = 21
+    elif args.dataset == 'cityscapes':
+        n_channels = 20
+    elif args.dataset == 'acdc':
+        n_channels = 4
+
     transform = get_transformation((args.crop_height, args.crop_width), resize=True, dataset=args.dataset)
 
     ## let the choice of dataset configurable
@@ -23,10 +33,12 @@ def validation(args):
         val_set = VOCDataset(root_path=root, name='val', ratio=0.5, transformation=transform, augmentation=None)
     elif args.dataset == 'cityscapes':
         val_set = CityscapesDataset(root_path=root_cityscapes, name='val', ratio=0.5, transformation=transform, augmentation=None)
+    elif args.dataset == 'acdc':
+        val_set = ACDCDataset(root_path=root_acdc, name='val', ratio=0.5, transformation=transform, augmentation=None)
 
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False)
 
-    Gsi = define_Gen(input_nc=3, output_nc=22, ngf=args.ngf, netG='resnet_9blocks_softmax', 
+    Gsi = define_Gen(input_nc=3, output_nc=n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax', 
                                     norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)
 
     ### best_iou
@@ -81,7 +93,7 @@ def validation(args):
         ### run
         Gsi.eval()
         for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
-            image_test = utils.cuda(image_test)
+            image_test = utils.cuda(image_test, args.gpu_ids)
             seg_map = Gsi(image_test)
             seg_map = activation_softmax(seg_map)
 
