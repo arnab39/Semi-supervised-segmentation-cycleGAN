@@ -8,6 +8,7 @@ import torchvision.datasets as dsets
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import utils
+from utils import make_one_hot
 from PIL import Image
 from arch import define_Gen
 from data_utils import VOCDataset, CityscapesDataset, ACDCDataset, get_transformation
@@ -40,6 +41,9 @@ def validation(args):
 
     Gsi = define_Gen(input_nc=3, output_nc=n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax', 
                                     norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)
+
+    Gis = define_Gen(input_nc=n_channels, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
+                              norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
 
     ### best_iou
     best_iou = 0
@@ -93,17 +97,48 @@ def validation(args):
         ### run
         Gsi.eval()
         for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
-            image_test = utils.cuda(image_test, args.gpu_ids)
+            image_test, real_segmentation = utils.cuda([image_test, real_segmentation], args.gpu_ids)
             seg_map = Gsi(image_test)
             seg_map = activation_softmax(seg_map)
+            fake_img = Gis(seg_map).detach()
+
+            fake_img_from_labels = Gis(make_one_hot(real_segmentation, args.dataset, args.gpu_ids).float()).detach()
+            fake_label_regenerated = Gsi(fake_img_from_labels).detach()
+            fake_label_regenerated = activation_softmax(fake_label_regenerated)
 
             prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
+            fake_regenerated_label = fake_label_regenerated.data.max(1)[1].squeeze_(1).cpu().numpy()
+
+            fake_img = fake_img.cpu()
+            fake_img_from_labels = fake_img_from_labels.cpu()
+
+            ### Now i am going to revert back the transformation on these images
+            if args.dataset == 'voc2012' or args.dataset == 'cityscapes':
+                trans_mean = [0.5, 0.5, 0.5]
+                trans_std = [0.5, 0.5, 0.5]
+                for k in range(3):
+                    fake_img[:, k, :, :] = ((fake_img[:, k, :, :] * trans_std[k]) + trans_mean[k])
+                    fake_img_from_labels[:, k, :, :] = ((fake_img_from_labels[:, k, :, :] * trans_std[k]) + trans_mean[k])
+
+            elif args.dataset == 'acdc':
+                trans_mean = [0.5]
+                trans_std = [0.5]
+                for k in range(1):
+                    fake_img[:, k, :, :] = ((fake_img[:, k, :, :] * trans_std[k]) + trans_mean[k])
+                    fake_img_from_labels[:, k, :, :] = ((fake_img_from_labels[:, k, :, :] * trans_std[k]) + trans_mean[k])
+
             for j in range(prediction.shape[0]):
                 new_img = prediction[j]     ### Taking a particular image from the batch
                 new_img = utils.colorize_mask(new_img, args.dataset)   ### So as to convert it back to a paletted image
 
+                regen_label = fake_regenerated_label[j]
+                regen_label = utils.colorize_mask(regen_label, args.dataset)
+
                 ### Now the new_img is PIL.Image
-                new_img.save(os.path.join(args.validation_dir+'/unsupervised/'+image_name[j]+'.png'))
+                new_img.save(os.path.join(args.validation_dir+'/unsupervised/generated_labels/'+image_name[j]+'.png'))
+                regen_label.save(os.path.join(args.validation_dir+'/unsupervised/regenerated_labels/'+image_name[j]+'.png'))
+                torchvision.utils.save_image(fake_img[j], os.path.join(args.validation_dir+'/unsupervised/regenerated_image/'+image_name[j]+'.jpg'))
+                torchvision.utils.save_image(fake_img_from_labels[j], os.path.join(args.validation_dir+'/unsupervised/image_from_labels/'+image_name[j]+'.jpg'))
             
             print('Epoch-', str(i+1), ' Done!')
         
