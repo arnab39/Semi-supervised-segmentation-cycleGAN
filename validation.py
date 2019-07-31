@@ -69,7 +69,7 @@ def validation(args):
             seg_map = Gsi(image_test)
             seg_map = activation_softmax(seg_map)
 
-            prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
+            prediction = seg_map.data.max(1)[1].squeeze_(1).cpu().numpy()   ### To convert from 22 --> 1 channel
             for j in range(prediction.shape[0]):
                 new_img = prediction[j]     ### Taking a particular image from the batch
                 new_img = utils.colorize_mask(new_img, args.dataset)   ### So as to convert it back to a paletted image
@@ -89,6 +89,7 @@ def validation(args):
         try:
             ckpt = utils.load_checkpoint('%s/latest_semisuper_cycleGAN.ckpt' % (args.checkpoint_dir))
             Gsi.load_state_dict(ckpt['Gsi'])
+            Gis.load_state_dict(ckpt['Gis'])
             best_iou = ckpt['best_iou']
 
         except:
@@ -106,7 +107,7 @@ def validation(args):
             fake_label_regenerated = Gsi(fake_img_from_labels).detach()
             fake_label_regenerated = activation_softmax(fake_label_regenerated)
 
-            prediction = seg_map.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()   ### To convert from 22 --> 1 channel
+            prediction = seg_map.data.max(1)[1].squeeze_(1).cpu().numpy()   ### To convert from 22 --> 1 channel
             fake_regenerated_label = fake_label_regenerated.data.max(1)[1].squeeze_(1).cpu().numpy()
 
             fake_img = fake_img.cpu()
