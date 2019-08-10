@@ -131,13 +131,6 @@ class VOCDataset(Dataset):
 
 
 class CityscapesDataset(Dataset):
-    """cityscapesLoader
-    https://www.cityscapes-dataset.com
-    Data is derived from CityScapes, and can be downloaded from here:
-    https://www.cityscapes-dataset.com/downloads/
-    Many Thanks to @fvisin for the loader repo:
-    https://github.com/fvisin/dataset_loaders/blob/master/dataset_loaders/images/cityscapes.py
-    """
 
     colors = [
         [128, 64, 128],

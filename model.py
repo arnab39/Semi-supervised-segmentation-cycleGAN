@@ -107,11 +107,6 @@ class supervised_model(object):
                 l_img, l_gt = utils.cuda([l_img, l_gt], args.gpu_ids)
 
                 lab_gt = self.Gsi(l_img)
-                # print('The maximum of the l_gt: ',l_gt.max(),' and the minimum is: ',l_gt.min())
-                # print('The labels name: ', img_name)
-                #l=l_gt.squeeze(1)
-                #print(l.shape,np.amax(l),np.amin(l))
-                #print(l.shape,l.unique(),l.min())
 
                 # CE losses
                 fullsupervisedloss = self.CE(lab_gt, l_gt.squeeze(1))
@@ -274,8 +269,6 @@ class semisuper_cycleGAN(object):
             val_set = ACDCDataset(root_path=root_acdc, name='val', ratio=0.5, transformation=transform,
                                             augmentation=None)
 
-        # assert (set(labeled_set.imgs) & set(unlabeled_set.imgs)).__len__() == 0
-
         '''
         https://discuss.pytorch.org/t/about-the-relation-between-batch-size-and-length-of-data-loader/10510
         ^^ The reason for using drop_last=True so as to obtain an even size of all the batches and
@@ -332,27 +325,6 @@ class semisuper_cycleGAN(object):
                 recon_lab_img = self.Gis(lab_gt.float())
                 recon_gt = self.Gsi(fake_img.float())
 
-                ### Again applying the activations in the label
-                ###### JUST APPLY THIS WHEN USING RECONSTRUCTION LOSS OF LABELS AS L1 AGAIN
-                # recon_gt = self.activation_softmax(recon_gt)
-
-                ### Printing out the ranges of all the various images
-                # print('The range for unl_img: Max: ',unl_img.max(), ' , Min: ', unl_img.min())
-                # print('The range for l_gt: Max: ',make_one_hot(l_gt, args.dataset, args.gpu_ids).float().max(), ' , Min: ', make_one_hot(l_gt, args.dataset, args.gpu_ids).float().min())
-                # print('The range for fake_gt: Max: ',fake_gt.max(), ' , Min: ', fake_gt.min())
-                # print('The range for fake_img: Max: ',fake_img.max(), ' , Min: ', fake_img.min())
-                # print('The range for recon_img: Max: ',recon_img.max(), ' , Min: ', recon_img.min())
-                # print('The range for recon_gt: Max: ',recon_gt.max(), ' , Min: ', recon_gt.min())
-
-                # img_idt = self.Gis(make_one_hot(l_gt, args.dataset).float())
-                # gt_idt = self.Gsi(unl_img.float())
-
-                # assert img_idt.shape == unl_img.shape, ('img_idt: '+str(img_idt.shape)+' unl_img: '+str(unl_img.shape))
-                # Identity losses
-                ###################################################
-                # img_idt_loss = self.L1(img_idt, unl_img) * args.lamda * args.idt_coef
-                # gt_idt_loss = self.L1(gt_idt, make_one_hot(l_gt, args.dataset, args.gpu_ids)) * args.lamda * args.idt_coef
-
                 # Adversarial losses
                 ###################################################
                 fake_img_dis = self.Di(fake_img)
@@ -392,27 +364,6 @@ class semisuper_cycleGAN(object):
                 # Update generators
                 ###################################################
                 gen_loss.backward()
-
-                ### To check the gradient norms
-                # Gsi_list = []
-                # Gis_list = []
-                # for p in list(filter(lambda p: p.grad is not None, self.Gsi.parameters())):
-                    # Gsi_list.append(p.grad.data.norm(2).item())
-                # for p in list(filter(lambda p: p.grad is not None, self.Gis.parameters())):
-                    # Gis_list.append(p.grad.data.norm(2).item())
-                # for p in list(filter(lambda p: p.grad is not None, self.Di.parameters())):
-                    # Di_list.append(p.grad.data.norm(2).item())
-                # for p in list(filter(lambda p: p.grad is not None, self.Ds.parameters())):
-                    # Ds_list.append(p.grad.data.norm(2).item())
-
-                # print('During Generator Computations, for Gsi : ', max(Gsi_list))
-                # print('During Generator Computations, for Gis : ', max(Gis_list))
-                # print('During Generator Computations, for Di : ', max(Di_list))
-                # print('During Generator Computations, for Ds : ', max(Ds_list))
-
-                ### clipping the gradients
-                # nn.utils.clip_grad_norm_(self.Gsi.parameters(), max_norm=80)                
-                # nn.utils.clip_grad_norm_(self.Gis.parameters(), max_norm=80)
 
                 self.g_optimizer.step()
 
@@ -470,27 +421,6 @@ class semisuper_cycleGAN(object):
                     ##################################################
                     discriminator_loss = args.discriminator_weight * (img_dis_loss + gt_dis_loss)
                     discriminator_loss.backward()
-
-                    ### To check the gradient norms
-                    # Di_list = []
-                    # Ds_list = []
-                    # for p in list(filter(lambda p: p.grad is not None, self.Gsi.parameters())):
-                        # Gsi_list.append(p.grad.data.norm(2).item())
-                    # for p in list(filter(lambda p: p.grad is not None, self.Gis.parameters())):
-                        # Gis_list.append(p.grad.data.norm(2).item())
-                    # for p in list(filter(lambda p: p.grad is not None, self.Di.parameters())):
-                        # Di_list.append(p.grad.data.norm(2).item())
-                    # for p in list(filter(lambda p: p.grad is not None, self.Ds.parameters())):
-                        # Ds_list.append(p.grad.data.norm(2).item())
-
-                    # print('During Discriminator Computations, for Gsi : ', max(Gsi_list))
-                    # print('During Discriminator Computations, for Gis : ', max(Gis_list))
-                    # print('During Discriminator Computations, for Di : ', max(Di_list))
-                    # print('During Discriminator Computations, for Ds : ', max(Ds_list))
-
-                    ### clipping the gradient norms
-                    # nn.utils.clip_grad_norm_(self.Di.parameters(), max_norm = 8)
-                    # nn.utils.clip_grad_norm_(self.Ds.parameters(), max_norm = 8)
 
                     # lab_gt_dis_loss.backward()
                     self.d_optimizer.step()

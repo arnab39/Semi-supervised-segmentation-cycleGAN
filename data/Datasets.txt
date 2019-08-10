@@ -2,3 +2,5 @@ File containing the links to public segmentation benchmarks.
 - PASCAL VOC 2012 Segmentation (http://host.robots.ox.ac.uk/pascal/VOC/voc2012/)
 - Cityscapes (https://www.cityscapes-dataset.com)
 - ACDC (https://www.creatis.insa-lyon.fr/Challenge/acdc/databases.html)
+
+Or you can download the preprocessed datasets from the link mentioned in the README
