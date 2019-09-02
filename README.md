@@ -1,5 +1,5 @@
 # Revisting Cycle-GAN for semi-supervised segmentation
-This repo contains the official Pytorch implementation of the paper: **Revisiting CycleGAN for semi-supervised segmentation**
+This repo contains the official Pytorch implementation of the paper: [Revisiting CycleGAN for semi-supervised segmentation](https://arxiv.org/abs/1908.11569)
 
 ## Contents
 1. [Summary of the Model](#1-summary-of-the-model)
