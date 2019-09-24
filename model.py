@@ -26,6 +26,9 @@ root_acdc = './data/ACDC'
 ### The location for tensorboard visualizations
 tensorboard_loc = './tensorboard_results/first_run'
 
+### The location from where we can get the pretrained model
+pretrained_loc = 'resnet101COCO-41f33a49.pth'
+
 class supervised_model(object):
     def __init__(self, args):
 
@@ -37,10 +40,25 @@ class supervised_model(object):
             self.n_channels = 4
 
         # Define the network 
-        self.Gsi = define_Gen(input_nc=3, output_nc=self.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax', norm=args.norm,
+        self.Gsi = define_Gen(input_nc=3, output_nc=self.n_channels, ngf=args.ngf, netG='deeplab', norm=args.norm,
                               use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)  # for image to segmentation
 
+        ### Now we put in the pretrained weights in Gsi
+        ### These will only be used in the case of VOC and cityscapes
+        if args.dataset != 'acdc':
+            saved_state_dict = torch.load(pretrained_loc)
+            new_params = self.Gsi.state_dict.copy()
+            for name, param in new_params.items():
+                print(name)
+                if name in saved_state_dict and param.size() == saved_state_dict[name].size():
+                    new_params[name].copy_(saved_state_dict[name])
+                    print('copy {}'.format(name))
+            self.Gsi.load_state_dict(new_params)
+
         utils.print_networks([self.Gsi], ['Gsi'])
+
+        ###Defining an interpolation function so as to match the output of network to feature map size
+        self.interp = nn.Upsample(size = (args.crop_height, args.crop_weidth), model='bilinear', align_corners=True)
 
         self.CE = nn.CrossEntropyLoss()
         self.activation_softmax = nn.Softmax2d()
@@ -108,6 +126,8 @@ class supervised_model(object):
 
                 lab_gt = self.Gsi(l_img)
 
+                lab_gt = self.interp(lab_gt)   ### To get the output of model same as labels
+
                 # CE losses
                 fullsupervisedloss = self.CE(lab_gt, l_gt.squeeze(1))
 
@@ -126,6 +146,8 @@ class supervised_model(object):
                     val_img, val_gt = utils.cuda([val_img, val_gt], args.gpu_ids)
 
                     outputs = self.Gsi(val_img)
+                    outputs = self.interp(outputs)
+                    outputs = self.activation_softmax(outputs)
                     
                     pred = outputs.data.max(1)[1].cpu().numpy()
                     gt = val_gt.squeeze().data.cpu().numpy()
@@ -141,6 +163,7 @@ class supervised_model(object):
             val_img, val_gt = utils.cuda([val_img, val_gt], args.gpu_ids)
             with torch.no_grad():
                 fake = self.Gsi(val_img).detach()
+                fake = self.interp(fake)
             fake = self.activation_softmax(fake)
             fake_prediction = fake.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()
             val_gt = val_gt.cpu()
@@ -186,24 +209,49 @@ class semisuper_cycleGAN(object):
         # Define the network 
         #####################################################
         # for segmentaion to image
-        self.Gis = define_Gen(input_nc=self.n_channels, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
+        self.Gis = define_Gen(input_nc=self.n_channels, output_nc=3, ngf=args.ngf, netG='deeplab',
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
         # for image to segmentation
-        self.Gsi = define_Gen(input_nc=3, output_nc=self.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax',
+        self.Gsi = define_Gen(input_nc=3, output_nc=self.n_channels, ngf=args.ngf, netG='deeplab',
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
-        self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD='pixel', n_layers_D=3,
+        self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD='fc_disc', n_layers_D=3,
                              norm=args.norm, gpu_ids=args.gpu_ids)
-        self.Ds = define_Dis(input_nc=1, ndf=args.ndf, netD='pixel', n_layers_D=3,
+        self.Ds = define_Dis(input_nc=1, ndf=args.ndf, netD='fc_disc', n_layers_D=3,
                              norm=args.norm, gpu_ids=args.gpu_ids)  # for voc 2012, there are 21 classes
+
+        ### To put the pretrained weights in Gis and Gsi
+        if args.dataset != 'acdc':
+            saved_state_dict = torch.load(pretrained_loc)
+            new_params_Gsi = self.Gsi.state_dict.copy()
+            new_params_Gis = self.Gis.state_dict.copy()
+            for name, param in new_params_Gsi.items():
+                print(name)
+                if name in saved_state_dict and param.size() == saved_state_dict[name].size():
+                    new_params_Gsi[name].copy_(saved_state_dict[name])
+                    print('copy {}'.format(name))
+            self.Gsi.load_state_dict(new_params_Gsi)
+            for name, param in new_params_Gis.items():
+                print(name)
+                if name in saved_state_dict and param.size() == saved_state_dict[name].size():
+                    new_params_Gis[name].copy_(saved_state_dict[name])
+                    print('copy {}'.format(name))
+            self.Gis.load_state_dict(new_params_Gis)
+
+        utils.print_networks([self.Gsi], ['Gsi'])
+
 
         utils.print_networks([self.Gis,self.Gsi,self.Di,self.Ds], ['Gis','Gsi','Di','Ds'])
 
         self.args = args
 
+        ### interpolation
+        self.interp = nn.Upsample((args.crop_height, args.crop_width), mode='bilinear', align_corners=True)
+
         self.MSE = nn.MSELoss()
         self.L1 = nn.L1Loss()
         self.CE = nn.CrossEntropyLoss()
         self.activation_softmax = nn.Softmax2d()
+        self.activation_tanh = nn.Tanh()
 
         ### Tensorboard writer
         self.writer_semisuper = SummaryWriter(tensorboard_loc + '_semisuper')
@@ -311,19 +359,34 @@ class semisuper_cycleGAN(object):
                 fake_gt = self.Gsi(unl_img.float())  ### having 21 channels
                 lab_gt = self.Gsi(l_img)  ### having 21 channels
 
+                ### Getting the outputs of the model to correct dimensions
+                fake_img = self.interp(fake_img)
+                fake_gt = self.interp(fake_gt)
+                lab_gt = self.interp(lab_gt)
+
                 # fake_gt = fake_gt.data.max(1)[1].squeeze_(1).squeeze_(0)  ### will get into no channels
                 # fake_gt = fake_gt.unsqueeze(1)   ### will get into 1 channel only
                 # fake_gt = make_one_hot(fake_gt, args.dataset, args.gpu_ids)
 
                 lab_loss_CE = self.CE(lab_gt, l_gt.squeeze(1))
 
-                ### Again applying activations in the label
+                ### Again applying activations
                 lab_gt = self.activation_softmax(lab_gt)
                 fake_gt = self.activation_softmax(fake_gt)
+                fake_img = self.activation_tanh(fake_img)
 
                 recon_img = self.Gis(fake_gt.float())
                 recon_lab_img = self.Gis(lab_gt.float())
                 recon_gt = self.Gsi(fake_img.float())
+
+                ### Getting the outputs of the model to correct dimensions
+                recon_img = self.interp(recon_img)
+                recon_lab_img = self.interp(recon_lab_img)
+                recon_gt = self.interp(recon_gt)
+
+                ## Applying the tanh activations
+                recon_img = self.activation_tanh(recon_img)
+                recon_lab_img = self.activation_tanh(recon_lab_img)
 
                 # Adversarial losses
                 ###################################################
@@ -443,6 +506,8 @@ class semisuper_cycleGAN(object):
                     val_img, val_gt = utils.cuda([val_img, val_gt], args.gpu_ids)
 
                     outputs = self.Gsi(val_img)
+                    outputs = self.interp(outputs)
+                    outputs = self.activation_tanh(outputs)
 
                     pred = outputs.data.max(1)[1].cpu().numpy()
                     gt = val_gt.squeeze().data.cpu().numpy()
@@ -458,11 +523,17 @@ class semisuper_cycleGAN(object):
             val_image, val_gt = utils.cuda([val_image, val_gt], args.gpu_ids)
             with torch.no_grad():
                 fake_label = self.Gsi(val_image).detach()
+                fake_label = self.interp(fake_label)
                 fake_label = self.activation_softmax(fake_label)
                 fake_img = self.Gis(fake_label).detach()
+                fake_img = self.interp(fake_img)
+                fake_img = self.activation_tanh(fake_img)
 
                 fake_img_from_labels = self.Gis(make_one_hot(val_gt, args.dataset, args.gpu_ids).float()).detach()
+                fake_img_from_labels = self.interp(fake_img_from_labels)
+                fake_img_from_labels = self.activation_tanh(fake_img_from_labels)
                 fake_label_regenerated = self.Gsi(fake_img_from_labels).detach()
+                fake_label_regenerated = self.interp(fake_label_regenerated)
                 fake_label_regenerated = self.activation_softmax(fake_label_regenerated)
             fake_prediction_label = fake_label.data.max(1)[1].squeeze_(1).cpu().numpy()
             fake_regenerated_label = fake_label_regenerated.data.max(1)[1].squeeze_(1).cpu().numpy()

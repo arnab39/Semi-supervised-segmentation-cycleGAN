@@ -1,8 +1,42 @@
-from torch import nn
+aaaaaaafrom torch import nn
 from .ops import conv_norm_lrelu, get_norm_layer, init_network
 import torch
 from torch.nn import functional as F
 import functools
+
+
+class FCDiscriminator(nn.Module):
+    ### This has been adapted directly from this repo:
+    ### https://github.com/hfslyc/AdvSemiSeg
+
+    def __init__(self, num_classes, ndf = 64):
+        super(FCDiscriminator, self).__init__()
+
+        self.conv1 = nn.Conv2d(num_classes, ndf, kernel_size=4, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(ndf, ndf*2, kernel_size=4, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(ndf*2, ndf*4, kernel_size=4, stride=2, padding=1)
+        self.conv4 = nn.Conv2d(ndf*4, ndf*8, kernel_size=4, stride=2, padding=1)
+        self.classifier = nn.Conv2d(ndf*8, 1, kernel_size=4, stride=2, padding=1)
+
+        self.leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        #self.up_sample = nn.Upsample(scale_factor=32, mode='bilinear')
+        #self.sigmoid = nn.Sigmoid()
+
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.leaky_relu(x)
+        x = self.conv2(x)
+        x = self.leaky_relu(x)
+        x = self.conv3(x)
+        x = self.leaky_relu(x)
+        x = self.conv4(x)
+        x = self.leaky_relu(x)
+        x = self.classifier(x)
+        #x = self.up_sample(x)
+        #x = self.sigmoid(x) 
+
+        return x
 
 
 class NLayerDiscriminator(nn.Module):
@@ -27,6 +61,7 @@ class NLayerDiscriminator(nn.Module):
 
     def forward(self, input):
         return self.dis_model(input)
+
 
 class PixelDiscriminator(nn.Module):
     def __init__(self, input_nc, ndf=64, norm_layer=nn.BatchNorm2d, use_bias=False):
@@ -58,6 +93,8 @@ def define_Dis(input_nc, ndf, netD, n_layers_D=3, norm='batch', gpu_ids=[0]):
         dis_net = NLayerDiscriminator(input_nc, ndf, n_layers_D, norm_layer=norm_layer, use_bias=use_bias)
     elif netD == 'pixel':
         dis_net = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer, use_bias=use_bias)
+    elif netD == 'fc_disc':
+        dis_net = FCDiscriminator(input_nc, ndf)
     else:
         raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
 

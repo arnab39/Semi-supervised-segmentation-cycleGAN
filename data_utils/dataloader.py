@@ -28,18 +28,6 @@ class VOCDataset(Dataset):
 
     '''
 
-    split_ratio = [0.85, 0.15]
-    '''
-    this split ratio is for the train (including the labeled and unlabeled) and the val dataset
-    '''
-
-    @classmethod
-    def reset_split_ratio(cls, new_ratio):
-        assert new_ratio.__len__() == 2, "should input 2 float numbers indicating percentage for train and test dataset"
-        assert np.array(new_ratio).sum() == 1, 'New split ratio should be normalized, given %s' % str(new_ratio)
-        assert np.array(new_ratio).min() > 0 and np.array(new_ratio).max() < 1
-        cls.split_ratio = new_ratio
-
     def __init__(self, root_path, name='label', ratio=0.5, transformation=None, augmentation=None):
         super(VOCDataset, self).__init__()
         self.root_path = root_path
@@ -53,11 +41,9 @@ class VOCDataset(Dataset):
         np.random.seed(1)  ### Because of this we are not getting repeated images for labelled and unlabelled data
 
         if self.name != 'test':
-            total_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainvalAug.txt')).values.reshape(-1)
-        
-            train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
-        
-            val_imgs = [x for x in total_imgs if x not in train_imgs]
+            train_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'trainvalAug.txt')).values.reshape(-1)
+                
+            val_imgs = pd.read_table(os.path.join(self.root_path, 'ImageSets/Segmentation', 'val.txt')).values.reshape(-1)
         
             labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
             labeled_imgs = list(labeled_imgs)
@@ -132,36 +118,6 @@ class VOCDataset(Dataset):
 
 class CityscapesDataset(Dataset):
 
-    colors = [
-        [128, 64, 128],
-        [244, 35, 232],
-        [70, 70, 70],
-        [102, 102, 156],
-        [190, 153, 153],
-        [153, 153, 153],
-        [250, 170, 30],
-        [220, 220, 0],
-        [107, 142, 35],
-        [152, 251, 152],
-        [0, 130, 180],
-        [220, 20, 60],
-        [255, 0, 0],
-        [0, 0, 142],
-        [0, 0, 70],
-        [0, 60, 100],
-        [0, 80, 100],
-        [0, 0, 230],
-        [119, 11, 32],
-        [0, 0, 0]
-    ]
-
-    label_colours = dict(zip(range(19), colors))
-
-    split_ratio = [0.85, 0.15]
-    '''
-    this split ratio is for the train (including the labeled and unlabeled) and the val dataset
-    '''
-
     def __init__(
         self,
         root_path,
@@ -182,7 +138,7 @@ class CityscapesDataset(Dataset):
         assert name in ('label', 'unlabel','val', 'test'), 'dataset name should be restricted in "label", "unlabel", "test" and "val", given %s' % name
 
         if self.name != 'test':
-            self.images_base = os.path.join(self.root, "leftImg8bit", 'trainval')
+            self.images_base = os.path.join(self.root, "leftImg8bit")
             self.annotations_base = os.path.join(
                 self.root, "gtFine", 'trainval'
             )
@@ -195,11 +151,10 @@ class CityscapesDataset(Dataset):
         np.random.seed(1) 
 
         if self.name != 'test':
-            total_imgs = recursive_glob(rootdir=self.images_base, suffix=".png")
-            total_imgs = np.array(total_imgs)
+            train_imgs = recursive_glob(rootdir=os.path.join(self.images_base, 'train'), suffix=".png")
+            train_imgs = np.array(train_imgs)
 
-            train_imgs = np.random.choice(total_imgs, size=int(self.__class__.split_ratio[0] * total_imgs.__len__()),replace=False)
-            val_imgs = [x for x in total_imgs if x not in train_imgs]
+            val_imgs = recursive_glob(rootdir=os.path.join(self.images_base, 'val'), suffix=".png")
             
             labeled_imgs = np.random.choice(train_imgs, size=int(self.ratio * train_imgs.__len__()), replace=False)
             labeled_imgs = list(labeled_imgs)
@@ -314,21 +269,6 @@ class CityscapesDataset(Dataset):
 
             return img, lbl, re.sub(r'.*/', '', img_path[38:]).rstrip('.png')   ### These numbers have been hard coded so as to get a suitable name for the model
 
-    def decode_segmap(self, temp):
-        r = temp.copy()
-        g = temp.copy()
-        b = temp.copy()
-        for l in range(0, self.n_classes):
-            r[temp == l] = self.label_colours[l][0]
-            g[temp == l] = self.label_colours[l][1]
-            b[temp == l] = self.label_colours[l][2]
-
-        rgb = np.zeros((temp.shape[0], temp.shape[1], 3))
-        rgb[:, :, 0] = r / 255.0
-        rgb[:, :, 1] = g / 255.0
-        rgb[:, :, 2] = b / 255.0
-        return rgb
-
     def encode_segmap(self, mask):
         # Put all void classes to ignore index
         for _voidc in self.void_classes:
@@ -348,7 +288,7 @@ class ACDCDataset(Dataset):
     '''
     this split ratio is for the train (including the labeled and unlabeled) and the val dataset
     '''
-
+    
     def __init__(self, root_path, name='label', ratio=0.5, transformation=None, augmentation=None):
         super(ACDCDataset, self).__init__()
         self.root = root_path

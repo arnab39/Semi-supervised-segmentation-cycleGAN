@@ -32,7 +32,8 @@ def init_network(net, gpu_ids=[]):
     if len(gpu_ids) > 0:
         assert(torch.cuda.is_available())
         net.cuda(gpu_ids[0])
-    init_weights(net)
+    ### I have commented this out only while we are using the Deeplab model because as such it is not required in that
+    # init_weights(net)
     return net
 
 
