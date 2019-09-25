@@ -39,17 +39,21 @@ def validation(args):
 
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False)
 
-    Gsi = define_Gen(input_nc=3, output_nc=n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax', 
+    Gsi = define_Gen(input_nc=3, output_nc=n_channels, ngf=args.ngf, netG='deeplab', 
                                     norm=args.norm, use_dropout= not args.no_dropout, gpu_ids=args.gpu_ids)
 
-    Gis = define_Gen(input_nc=n_channels, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
+    Gis = define_Gen(input_nc=n_channels, output_nc=3, ngf=args.ngf, netG='deeplab',
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
 
     ### best_iou
     best_iou = 0
 
+    ### Interpolation
+    interp = nn.Upsample(size = (args.crop_height, args.crop_width), mode='bilinear', align_corners=True)
+
     ### Softmax activation
     activation_softmax = nn.Softmax2d()
+    activation_tanh = nn.Tanh()
 
     if(args.model == 'supervised_model'):
 
@@ -67,6 +71,7 @@ def validation(args):
         for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
             image_test = utils.cuda(image_test, args.gpu_ids)
             seg_map = Gsi(image_test)
+            seg_map = interp(seg_map)
             seg_map = activation_softmax(seg_map)
 
             prediction = seg_map.data.max(1)[1].squeeze_(1).cpu().numpy()   ### To convert from 22 --> 1 channel
@@ -100,11 +105,17 @@ def validation(args):
         for i, (image_test, real_segmentation, image_name) in enumerate(val_loader):
             image_test, real_segmentation = utils.cuda([image_test, real_segmentation], args.gpu_ids)
             seg_map = Gsi(image_test)
+            seg_map = interp(seg_map)
             seg_map = activation_softmax(seg_map)
             fake_img = Gis(seg_map).detach()
+            fake_img = interp(fake_img)
+            fake_img = activation_tanh(fake_img)
 
             fake_img_from_labels = Gis(make_one_hot(real_segmentation, args.dataset, args.gpu_ids).float()).detach()
+            fake_img_from_labels = interp(fake_img_from_labels)
+            fake_img_from_labels = activation_tanh(fake_img_from_labels)
             fake_label_regenerated = Gsi(fake_img_from_labels).detach()
+            fake_label_regenerated = interp(fake_label_regenerated)
             fake_label_regenerated = activation_softmax(fake_label_regenerated)
 
             prediction = seg_map.data.max(1)[1].squeeze_(1).cpu().numpy()   ### To convert from 22 --> 1 channel

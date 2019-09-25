@@ -47,7 +47,7 @@ class supervised_model(object):
         ### These will only be used in the case of VOC and cityscapes
         if args.dataset != 'acdc':
             saved_state_dict = torch.load(pretrained_loc)
-            new_params = self.Gsi.state_dict.copy()
+            new_params = self.Gsi.state_dict().copy()
             for name, param in new_params.items():
                 print(name)
                 if name in saved_state_dict and param.size() == saved_state_dict[name].size():
@@ -58,7 +58,7 @@ class supervised_model(object):
         utils.print_networks([self.Gsi], ['Gsi'])
 
         ###Defining an interpolation function so as to match the output of network to feature map size
-        self.interp = nn.Upsample(size = (args.crop_height, args.crop_weidth), model='bilinear', align_corners=True)
+        self.interp = nn.Upsample(size = (args.crop_height, args.crop_width), mode='bilinear', align_corners=True)
 
         self.CE = nn.CrossEntropyLoss()
         self.activation_softmax = nn.Softmax2d()
@@ -222,8 +222,8 @@ class semisuper_cycleGAN(object):
         ### To put the pretrained weights in Gis and Gsi
         if args.dataset != 'acdc':
             saved_state_dict = torch.load(pretrained_loc)
-            new_params_Gsi = self.Gsi.state_dict.copy()
-            new_params_Gis = self.Gis.state_dict.copy()
+            new_params_Gsi = self.Gsi.state_dict().copy()
+            new_params_Gis = self.Gis.state_dict().copy()
             for name, param in new_params_Gsi.items():
                 print(name)
                 if name in saved_state_dict and param.size() == saved_state_dict[name].size():
