@@ -20,9 +20,12 @@ def get_args():
     parser.add_argument('--crop_width', type=int, default=None)
     parser.add_argument('--lamda_img', type=int, default=1)        # For image_cycle_loss
     parser.add_argument('--lamda_gt', type=int, default=0.05)        # For gt_cycle_loss
+    parser.add_argument('--lamda_perceptual', type=int, default=1)     # For image cycle perceptual loss
     # parser.add_argument('--idt_coef', type=float, default=0.5)        
     # parser.add_argument('--omega', type=int, default=5)
-    parser.add_argument('--gen_weight', type=int, default=1)
+    parser.add_argument('--lab_CE_weight', type=int, default=1)
++   parser.add_argument('--lab_MSE_weight', type=int, default=1)
+    parser.add_argument('--lab_perceptual_weight', type=int, default=1)
     parser.add_argument('--adversarial_weight', type=int, default=0.5)
     parser.add_argument('--discriminator_weight', type=int, default=1.0)
     parser.add_argument('--training', type=bool, default=False)

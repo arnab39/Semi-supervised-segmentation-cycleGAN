@@ -10,6 +10,7 @@ import torchvision.datasets as dsets
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import utils
+from utils import perceptual_loss
 from arch import define_Gen, define_Dis, set_grad
 from data_utils import VOCDataset, CityscapesDataset, ACDCDataset, get_transformation
 from utils import make_one_hot
@@ -216,7 +217,7 @@ class semisuper_cycleGAN(object):
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
         self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD='fc_disc', n_layers_D=3,
                              norm=args.norm, gpu_ids=args.gpu_ids)
-        self.Ds = define_Dis(input_nc=1, ndf=args.ndf, netD='fc_disc', n_layers_D=3,
+        self.Ds = define_Dis(input_nc=self.n_channels, ndf=args.ndf, netD='fc_disc', n_layers_D=3,
                              norm=args.norm, gpu_ids=args.gpu_ids)  # for voc 2012, there are 21 classes
 
         ### To put the pretrained weights in Gis and Gsi
@@ -252,6 +253,7 @@ class semisuper_cycleGAN(object):
         self.CE = nn.CrossEntropyLoss()
         self.activation_softmax = nn.Softmax2d()
         self.activation_tanh = nn.Tanh()
+        self.activation_sigmoid = nn.Sigmoid()
 
         ### Tensorboard writer
         self.writer_semisuper = SummaryWriter(tensorboard_loc + '_semisuper')
@@ -395,7 +397,7 @@ class semisuper_cycleGAN(object):
                 ### For passing different type of input to Ds
                 fake_gt_discriminator = fake_gt.data.max(1)[1].squeeze_(1).squeeze_(0)
                 fake_gt_discriminator = fake_gt_discriminator.unsqueeze(1)
-                # fake_gt_discriminator = make_one_hot(fake_gt_discriminator, args.dataset, args.gpu_ids)
+                fake_gt_discriminator = make_one_hot(fake_gt_discriminator, args.dataset, args.gpu_ids)
                 fake_gt_dis = self.Ds(fake_gt_discriminator.float())
                 # lab_gt_dis = self.Ds(lab_gt)
 
@@ -410,6 +412,7 @@ class semisuper_cycleGAN(object):
                 # Cycle consistency losses
                 ###################################################
                 img_cycle_loss = self.L1(recon_img, unl_img)
+                img_cycle_loss_perceptual = perceptual_loss(recon_img, unl_img, args.gpu_ids)
                 gt_cycle_loss = self.CE(recon_gt, l_gt.squeeze(1))
                 # lab_img_cycle_loss = self.L1(recon_lab_img, l_img) * args.lamda
 
@@ -417,12 +420,13 @@ class semisuper_cycleGAN(object):
                 ###################################################
                 # lab_loss_CE = self.CE(lab_gt, l_gt.squeeze(1))
                 lab_loss_MSE = self.MSE(fake_img, l_img)
+                lab_loss_perceptual = perceptual_loss(fake_img, l_img, args.gpu_ids)
 
-                fullsupervisedloss = lab_loss_CE + lab_loss_MSE
+                fullsupervisedloss = args.lab_CE_weight*lab_loss_CE + args.lab_MSE_weight*lab_loss_MSE + args.lab_perceptual_weight*lab_loss_perceptual
 
-                unsupervisedloss = args.adversarial_weight*(img_gen_loss + gt_gen_loss) + img_cycle_loss*args.lamda_img + gt_cycle_loss*args.lamda_gt
+                unsupervisedloss = args.adversarial_weight*(img_gen_loss + gt_gen_loss) + img_cycle_loss*args.lamda_img + gt_cycle_loss*args.lamda_gt + img_cycle_loss_perceptual * args.lamda_perceptual
 
-                gen_loss = args.gen_weight*(fullsupervisedloss) + unsupervisedloss
+                gen_loss = fullsupervisedloss + unsupervisedloss
 
                 # Update generators
                 ###################################################
@@ -457,11 +461,12 @@ class semisuper_cycleGAN(object):
 
                     # lab_gt_dis = self.Ds(lab_gt)
 
+                    l_gt = make_one_hot(l_gt, args.dataset, args.gpu_ids)
                     real_gt_dis = self.Ds(l_gt.float())
 
                     fake_gt_discriminator = fake_gt.data.max(1)[1].squeeze_(1).squeeze_(0)
                     fake_gt_discriminator = fake_gt_discriminator.unsqueeze(1)
-                    # fake_gt_discriminator = make_one_hot(fake_gt_discriminator, args.dataset, args.gpu_ids)
+                    fake_gt_discriminator = make_one_hot(fake_gt_discriminator, args.dataset, args.gpu_ids)
                     fake_gt_dis = self.Ds(fake_gt_discriminator.float())
     
                     real_label = utils.cuda(Variable(torch.ones(unl_img_dis.size())), args.gpu_ids)
@@ -493,8 +498,8 @@ class semisuper_cycleGAN(object):
                    img_dis_loss + gt_dis_loss, unsupervisedloss, fullsupervisedloss))
                 
                 self.writer_semisuper.add_scalars('Dis Loss', {'img_dis_loss':img_dis_loss, 'gt_dis_loss':gt_dis_loss}, len(labeled_loader)*epoch + i)
-                self.writer_semisuper.add_scalars('Unlabelled Loss', {'img_gen_loss': img_gen_loss, 'gt_gen_loss':gt_gen_loss, 'img_cycle_loss':img_cycle_loss, 'gt_cycle_loss':gt_cycle_loss}, len(labeled_loader)*epoch + i)
-                self.writer_semisuper.add_scalars('Labelled Loss', {'lab_loss_CE':lab_loss_CE, 'lab_loss_MSE':lab_loss_MSE}, len(labeled_loader)*epoch + i)
+                self.writer_semisuper.add_scalars('Unlabelled Loss', {'img_gen_loss': img_gen_loss, 'gt_gen_loss':gt_gen_loss, 'img_cycle_loss':img_cycle_loss, 'gt_cycle_loss':gt_cycle_loss, 'img_cycle_loss_perceptual':img_cycle_loss_perceptual}, len(labeled_loader)*epoch + i)
+                self.writer_semisuper.add_scalars('Labelled Loss', {'lab_loss_CE':lab_loss_CE, 'lab_loss_MSE':lab_loss_MSE, 'lab_loss_perceptual':lab_loss_perceptual}, len(labeled_loader)*epoch + i)
 
                 counter += 1
 

@@ -7,6 +7,9 @@ import torch.nn as nn
 import torch
 from torch.autograd import Variable
 from PIL import Image
+from torchvision import models
+from collections import namedtuple
+from torchvison import transforms
 
 
 '''
@@ -135,6 +138,75 @@ class GaussianNoise(nn.Module):
             sampled_noise = torch.zeros(x.size()).normal_() * scale
             x = x + sampled_noise
         return x
+
+'''
+This will be used for calculation of perceptual losses
+'''
+class Vgg16(torch.nn.Module):
+    def __init__(self, requires_grad=False):
+        super(Vgg16, self).__init__()
+        vgg_pretrained_features = models.vgg16(pretrained=True).features
+        self.slice1 = torch.nn.Sequential()
+        self.slice2 = torch.nn.Sequential()
+        self.slice3 = torch.nn.Sequential()
+        self.slice4 = torch.nn.Sequential()
+        for x in range(4):
+            self.slice1.add_module(str(x), vgg_pretrained_features[x])
+        for x in range(4, 9):
+            self.slice2.add_module(str(x), vgg_pretrained_features[x])
+        for x in range(9, 16):
+            self.slice3.add_module(str(x), vgg_pretrained_features[x])
+        for x in range(16, 23):
+            self.slice4.add_module(str(x), vgg_pretrained_features[x])
+        if not requires_grad:
+            for param in self.parameters():
+                param.requires_grad = False
+
+    def forward(self, X):
+        h = self.slice1(X)
+        h_relu1_2 = h
+        h = self.slice2(h)
+        h_relu2_2 = h
+        h = self.slice3(h)
+        h_relu3_3 = h
+        h = self.slice4(h)
+        h_relu4_3 = h
+        vgg_outputs = namedtuple("VggOutputs", ['relu1_2', 'relu2_2', 'relu3_3', 'relu4_3'])
+        out = vgg_outputs(h_relu1_2, h_relu2_2, h_relu3_3, h_relu4_3)
+        return out
+
+'''
+The definition of the perceptual loss
+'''
+def perceptual_loss(x, y, gpu_ids):
+    """
+    Calculates the perceptual loss on the basis of the VGG network
+    Parameters:
+    x, y: the images between which perceptual loss is to be calculated
+    """
+
+    ### Considering the fact in this case x,y both are images in the range -1 to 1 and we need normal distribution
+    ### before passing through VGG
+
+    x = x*0.5 + 0.5
+    trans_mean = [0.485, 0.456, 0.406]
+    trans_std = [0.229, 0.224, 0.225]
+
+    for i in range(3):
+        x[:, i, :, :] = x[:, i, :, :]*trans_std[i] + trans_mean[i]
+        y[:, i, :, :] = y[:, i, :, :]*trans_std[i] + trans_mean[i]
+
+    ### Now this is normal distribution
+
+    vgg = Vgg16(requires_grad=False).cuda(gpu_ids[0])
+
+    features_y = vgg(y)
+    features_x = vgg(x)
+
+    mse_loss = nn.MSELoss()
+    loss = mse_loss(features_y.relu2_2, features_x.relu2_2)
+
+    return loss
 
 
 # To make directories
