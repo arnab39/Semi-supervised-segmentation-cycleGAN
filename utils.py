@@ -9,7 +9,7 @@ from torch.autograd import Variable
 from PIL import Image
 from torchvision import models
 from collections import namedtuple
-from torchvison import transforms
+from torchvision import transforms
 
 
 '''
@@ -188,20 +188,21 @@ def perceptual_loss(x, y, gpu_ids):
     ### Considering the fact in this case x,y both are images in the range -1 to 1 and we need normal distribution
     ### before passing through VGG
 
-    x = x*0.5 + 0.5
+    u = x*0.5 + 0.5
+    v = y*0.5 + 0.5
     trans_mean = [0.485, 0.456, 0.406]
     trans_std = [0.229, 0.224, 0.225]
 
     for i in range(3):
-        x[:, i, :, :] = x[:, i, :, :]*trans_std[i] + trans_mean[i]
-        y[:, i, :, :] = y[:, i, :, :]*trans_std[i] + trans_mean[i]
+        u[:, i, :, :] = u[:, i, :, :]*trans_std[i] + trans_mean[i]
+        v[:, i, :, :] = v[:, i, :, :]*trans_std[i] + trans_mean[i]
 
     ### Now this is normal distribution
 
     vgg = Vgg16(requires_grad=False).cuda(gpu_ids[0])
 
-    features_y = vgg(y)
-    features_x = vgg(x)
+    features_y = vgg(v)
+    features_x = vgg(u)
 
     mse_loss = nn.MSELoss()
     loss = mse_loss(features_y.relu2_2, features_x.relu2_2)

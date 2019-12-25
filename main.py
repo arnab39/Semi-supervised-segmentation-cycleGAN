@@ -11,22 +11,22 @@ def get_args():
     parser = ArgumentParser(description='cycleGAN PyTorch')
     parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--decay_epoch', type=int, default=100)
-    parser.add_argument('--batch_size', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--lr', type=float, default=.0002)
     # parser.add_argument('--load_height', type=int, default=286)
     # parser.add_argument('--load_width', type=int, default=286)
     parser.add_argument('--gpu_ids', type=str, default='0')
     parser.add_argument('--crop_height', type=int, default=None)
     parser.add_argument('--crop_width', type=int, default=None)
-    parser.add_argument('--lamda_img', type=int, default=1)        # For image_cycle_loss
-    parser.add_argument('--lamda_gt', type=int, default=0.05)        # For gt_cycle_loss
-    parser.add_argument('--lamda_perceptual', type=int, default=1)     # For image cycle perceptual loss
+    parser.add_argument('--lamda_img', type=int, default=0.5)        # For image_cycle_loss
+    parser.add_argument('--lamda_gt', type=int, default=0.1)        # For gt_cycle_loss
+    parser.add_argument('--lamda_perceptual', type=int, default=0)     # For image cycle perceptual loss
     # parser.add_argument('--idt_coef', type=float, default=0.5)        
     # parser.add_argument('--omega', type=int, default=5)
     parser.add_argument('--lab_CE_weight', type=int, default=1)
-+   parser.add_argument('--lab_MSE_weight', type=int, default=1)
-    parser.add_argument('--lab_perceptual_weight', type=int, default=1)
-    parser.add_argument('--adversarial_weight', type=int, default=0.5)
+    parser.add_argument('--lab_MSE_weight', type=int, default=1)
+    parser.add_argument('--lab_perceptual_weight', type=int, default=0)
+    parser.add_argument('--adversarial_weight', type=int, default=1.0)
     parser.add_argument('--discriminator_weight', type=int, default=1.0)
     parser.add_argument('--training', type=bool, default=False)
     parser.add_argument('--testing', type=bool, default=False)
@@ -59,7 +59,7 @@ def main():
   ### For setting the image dimensions for different datasets
   if args.crop_height == None and args.crop_width == None:
     if args.dataset == 'voc2012':
-      args.crop_height = args.crop_width = 321
+      args.crop_height = args.crop_width = 320
     elif args.dataset == 'acdc':
       args.crop_height = args.crop_width = 256
     elif args.dataset == 'cityscapes':

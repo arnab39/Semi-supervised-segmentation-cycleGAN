@@ -33,7 +33,7 @@ def init_network(net, gpu_ids=[]):
         assert(torch.cuda.is_available())
         net.cuda(gpu_ids[0])
     ### I have commented this out only while we are using the Deeplab model because as such it is not required in that
-    # init_weights(net)
+    init_weights(net)
     return net
 
 

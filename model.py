@@ -10,7 +10,7 @@ import torchvision.datasets as dsets
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 import utils
-from utils import perceptual_loss
+# from utils import perceptual_loss
 from arch import define_Gen, define_Dis, set_grad
 from data_utils import VOCDataset, CityscapesDataset, ACDCDataset, get_transformation
 from utils import make_one_hot
@@ -50,16 +50,17 @@ class supervised_model(object):
             saved_state_dict = torch.load(pretrained_loc)
             new_params = self.Gsi.state_dict().copy()
             for name, param in new_params.items():
-                print(name)
+                # print(name)
                 if name in saved_state_dict and param.size() == saved_state_dict[name].size():
                     new_params[name].copy_(saved_state_dict[name])
-                    print('copy {}'.format(name))
-            self.Gsi.load_state_dict(new_params)
+                    # print('copy {}'.format(name))
+            # self.Gsi.load_state_dict(new_params)
 
         utils.print_networks([self.Gsi], ['Gsi'])
 
         ###Defining an interpolation function so as to match the output of network to feature map size
         self.interp = nn.Upsample(size = (args.crop_height, args.crop_width), mode='bilinear', align_corners=True)
+        self.interp_val = nn.Upsample(size = (512, 512), mode='bilinear', align_corners=True)
 
         self.CE = nn.CrossEntropyLoss()
         self.activation_softmax = nn.Softmax2d()
@@ -88,12 +89,13 @@ class supervised_model(object):
     def train(self, args):
 
         transform = get_transformation((self.args.crop_height, self.args.crop_width), resize=True, dataset=args.dataset)
+        val_transform = get_transformation((512, 512), resize=True, dataset=args.dataset)
 
         # let the choice of dataset configurable
         if self.args.dataset == 'voc2012':
-            labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform,
+            labeled_set = VOCDataset(root_path=root, name='label', ratio=1.0, transformation=transform,
                                      augmentation=None)
-            val_set = VOCDataset(root_path=root, name='val', ratio=0.5, transformation=transform,
+            val_set = VOCDataset(root_path=root, name='val', ratio=0.5, transformation=val_transform,
                                  augmentation=None)
             labeled_loader = DataLoader(labeled_set, batch_size=self.args.batch_size, shuffle=True, drop_last=True)
             val_loader = DataLoader(val_set, batch_size=self.args.batch_size, shuffle=True)
@@ -147,7 +149,7 @@ class supervised_model(object):
                     val_img, val_gt = utils.cuda([val_img, val_gt], args.gpu_ids)
 
                     outputs = self.Gsi(val_img)
-                    outputs = self.interp(outputs)
+                    outputs = self.interp_val(outputs)
                     outputs = self.activation_softmax(outputs)
                     
                     pred = outputs.data.max(1)[1].cpu().numpy()
@@ -164,7 +166,7 @@ class supervised_model(object):
             val_img, val_gt = utils.cuda([val_img, val_gt], args.gpu_ids)
             with torch.no_grad():
                 fake = self.Gsi(val_img).detach()
-                fake = self.interp(fake)
+                fake = self.interp_val(fake)
             fake = self.activation_softmax(fake)
             fake_prediction = fake.data.max(1)[1].squeeze_(1).squeeze_(0).cpu().numpy()
             val_gt = val_gt.cpu()
@@ -215,28 +217,45 @@ class semisuper_cycleGAN(object):
         # for image to segmentation
         self.Gsi = define_Gen(input_nc=3, output_nc=self.n_channels, ngf=args.ngf, netG='deeplab',
                               norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
-        self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD='fc_disc', n_layers_D=3,
+        self.Di = define_Dis(input_nc=3, ndf=args.ndf, netD='pixel', n_layers_D=3,
                              norm=args.norm, gpu_ids=args.gpu_ids)
-        self.Ds = define_Dis(input_nc=self.n_channels, ndf=args.ndf, netD='fc_disc', n_layers_D=3,
+        self.Ds = define_Dis(input_nc=self.n_channels, ndf=args.ndf, netD='pixel', n_layers_D=3,
                              norm=args.norm, gpu_ids=args.gpu_ids)  # for voc 2012, there are 21 classes
 
+        self.old_Gis = define_Gen(input_nc=self.n_channels, output_nc=3, ngf=args.ngf, netG='resnet_9blocks',
+                                  norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
+        self.old_Gsi = define_Gen(input_nc=3, output_nc=self.n_channels, ngf=args.ngf, netG='resnet_9blocks_softmax',
+                                  norm=args.norm, use_dropout=not args.no_dropout, gpu_ids=args.gpu_ids)
+        self.old_Di = define_Dis(input_nc=3, ndf=args.ndf, netD='pixel', n_layers_D=3,
+                                 norm=args.norm, gpu_ids=args.gpu_ids)
+
         ### To put the pretrained weights in Gis and Gsi
-        if args.dataset != 'acdc':
-            saved_state_dict = torch.load(pretrained_loc)
-            new_params_Gsi = self.Gsi.state_dict().copy()
-            new_params_Gis = self.Gis.state_dict().copy()
-            for name, param in new_params_Gsi.items():
-                print(name)
-                if name in saved_state_dict and param.size() == saved_state_dict[name].size():
-                    new_params_Gsi[name].copy_(saved_state_dict[name])
-                    print('copy {}'.format(name))
-            self.Gsi.load_state_dict(new_params_Gsi)
-            for name, param in new_params_Gis.items():
-                print(name)
-                if name in saved_state_dict and param.size() == saved_state_dict[name].size():
-                    new_params_Gis[name].copy_(saved_state_dict[name])
-                    print('copy {}'.format(name))
-            self.Gis.load_state_dict(new_params_Gis)
+        # if args.dataset != 'acdc':
+        #     saved_state_dict = torch.load(pretrained_loc)
+        #     new_params_Gsi = self.Gsi.state_dict().copy()
+        #     # new_params_Gis = self.Gis.state_dict().copy()
+        #     for name, param in new_params_Gsi.items():
+        #         # print(name)
+        #         if name in saved_state_dict and param.size() == saved_state_dict[name].size():
+        #             new_params_Gsi[name].copy_(saved_state_dict[name])
+        #             # print('copy {}'.format(name))
+        #     self.Gsi.load_state_dict(new_params_Gsi)
+            # for name, param in new_params_Gis.items():
+            #     # print(name)
+            #     if name in saved_state_dict and param.size() == saved_state_dict[name].size():
+            #         new_params_Gis[name].copy_(saved_state_dict[name])
+            #         # print('copy {}'.format(name))
+            # # self.Gis.load_state_dict(new_params_Gis)
+
+        ### This is just so as to get pretrained methods for the case of Gis
+        if args.dataset == 'voc2012':
+            try:
+                ckpt_for_Arnab_loss = utils.load_checkpoint('./ckpt_for_Arnab_loss.ckpt')
+                self.old_Gis.load_state_dict(ckpt_for_Arnab_loss['Gis'])
+                self.old_Gsi.load_state_dict(ckpt_for_Arnab_loss['Gsi'])
+            except:
+                print('**There is an error in loading the ckpt_for_Arnab_loss**')
+
 
         utils.print_networks([self.Gsi], ['Gsi'])
 
@@ -298,9 +317,9 @@ class semisuper_cycleGAN(object):
 
         # let the choice of dataset configurable
         if self.args.dataset == 'voc2012':
-            labeled_set = VOCDataset(root_path=root, name='label', ratio=0.5, transformation=transform,
+            labeled_set = VOCDataset(root_path=root, name='label', ratio=0.1, transformation=transform,
                                      augmentation=None)
-            unlabeled_set = VOCDataset(root_path=root, name='unlabel', ratio=0.5, transformation=transform,
+            unlabeled_set = VOCDataset(root_path=root, name='unlabel', ratio=0.1, transformation=transform,
                                        augmentation=None)
             val_set = VOCDataset(root_path=root, name='val', ratio=0.5, transformation=transform,
                                  augmentation=None)
@@ -328,6 +347,7 @@ class semisuper_cycleGAN(object):
         unlabeled_loader = DataLoader(unlabeled_set, batch_size=args.batch_size, shuffle=True, drop_last=True)
         val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
+        new_img_fake_sample = utils.Sample_from_Pool()
         img_fake_sample = utils.Sample_from_Pool()
         gt_fake_sample = utils.Sample_from_Pool()
 
@@ -343,6 +363,10 @@ class semisuper_cycleGAN(object):
             self.Gsi.train()
             self.Gis.train()
 
+            # if (epoch+1)%10 == 0:
+                # args.lamda_img = args.lamda_img + 0.08
+                # args.lamda_gt = args.lamda_gt + 0.04
+
             for i, ((l_img, l_gt, _), (unl_img, _, _)) in enumerate(zip(labeled_loader, unlabeled_loader)):
                 # step
                 step = epoch * min(len(labeled_loader), len(unlabeled_loader)) + i + 1
@@ -352,7 +376,8 @@ class semisuper_cycleGAN(object):
                 # Generator Computations
                 ##################################################
 
-                set_grad([self.Di, self.Ds], False)
+                set_grad([self.Di, self.Ds, self.old_Di], False)
+                set_grad([self.old_Gsi, self.old_Gis], False)
                 self.g_optimizer.zero_grad()
 
                 # Forward pass through generators
@@ -375,7 +400,10 @@ class semisuper_cycleGAN(object):
                 ### Again applying activations
                 lab_gt = self.activation_softmax(lab_gt)
                 fake_gt = self.activation_softmax(fake_gt)
-                fake_img = self.activation_tanh(fake_img)
+                # fake_gt = fake_gt.data.max(1)[1].squeeze_(1).squeeze_(0)
+                # fake_gt = fake_gt.unsqueeze(1)
+                # fake_gt = make_one_hot(fake_gt, args.dataset, args.gpu_ids)
+                # fake_img = self.activation_tanh(fake_img)
 
                 recon_img = self.Gis(fake_gt.float())
                 recon_lab_img = self.Gis(lab_gt.float())
@@ -386,13 +414,22 @@ class semisuper_cycleGAN(object):
                 recon_lab_img = self.interp(recon_lab_img)
                 recon_gt = self.interp(recon_gt)
 
+                ### This is for the case of the new loss between the recon_img from resnet and deeplab network
+                resnet_fake_gt = self.old_Gsi(unl_img.float())
+                resnet_lab_gt = self.old_Gsi(l_img)
+                resnet_lab_gt = self.activation_softmax(resnet_lab_gt)
+                resnet_fake_gt = self.activation_softmax(resnet_fake_gt)
+                resnet_recon_img = self.old_Gis(resnet_fake_gt.float())
+                resnet_recon_lab_img = self.old_Gis(resnet_lab_gt.float())
+
                 ## Applying the tanh activations
-                recon_img = self.activation_tanh(recon_img)
-                recon_lab_img = self.activation_tanh(recon_lab_img)
+                # recon_img = self.activation_tanh(recon_img)
+                # recon_lab_img = self.activation_tanh(recon_lab_img)
 
                 # Adversarial losses
                 ###################################################
                 fake_img_dis = self.Di(fake_img)
+                resnet_fake_img_dis = self.old_Di(recon_img)
 
                 ### For passing different type of input to Ds
                 fake_gt_discriminator = fake_gt.data.max(1)[1].squeeze_(1).squeeze_(0)
@@ -401,30 +438,32 @@ class semisuper_cycleGAN(object):
                 fake_gt_dis = self.Ds(fake_gt_discriminator.float())
                 # lab_gt_dis = self.Ds(lab_gt)
 
-                real_label = utils.cuda(Variable(torch.ones(fake_gt_dis.size())), args.gpu_ids)
+                real_label_gt = utils.cuda(Variable(torch.ones(fake_gt_dis.size())), args.gpu_ids)
+                real_label_img = utils.cuda(Variable(torch.ones(fake_img_dis.size())), args.gpu_ids)
 
                 # here is much better to have a cross entropy loss for classification.
-                img_gen_loss = self.MSE(fake_img_dis, real_label)
-                gt_gen_loss = self.MSE(fake_gt_dis, real_label)
+                img_gen_loss = self.MSE(fake_img_dis, real_label_img)
+                gt_gen_loss = self.MSE(fake_gt_dis, real_label_gt)
                 # gt_label_gen_loss = self.MSE(lab_gt_dis, real_label)
 
 
                 # Cycle consistency losses
                 ###################################################
-                img_cycle_loss = self.L1(recon_img, unl_img)
-                img_cycle_loss_perceptual = perceptual_loss(recon_img, unl_img, args.gpu_ids)
+                resnet_img_cycle_loss = self.MSE(resnet_fake_img_dis, real_label_img)
+                # img_cycle_loss = self.L1(recon_img, unl_img)
+                # img_cycle_loss_perceptual = perceptual_loss(recon_img, unl_img, args.gpu_ids)
                 gt_cycle_loss = self.CE(recon_gt, l_gt.squeeze(1))
                 # lab_img_cycle_loss = self.L1(recon_lab_img, l_img) * args.lamda
 
                 # Total generators losses
                 ###################################################
                 # lab_loss_CE = self.CE(lab_gt, l_gt.squeeze(1))
-                lab_loss_MSE = self.MSE(fake_img, l_img)
-                lab_loss_perceptual = perceptual_loss(fake_img, l_img, args.gpu_ids)
+                lab_loss_MSE = self.L1(fake_img, l_img)
+                # lab_loss_perceptual = perceptual_loss(fake_img, l_img, args.gpu_ids)
 
-                fullsupervisedloss = args.lab_CE_weight*lab_loss_CE + args.lab_MSE_weight*lab_loss_MSE + args.lab_perceptual_weight*lab_loss_perceptual
+                fullsupervisedloss = args.lab_CE_weight*lab_loss_CE + args.lab_MSE_weight*lab_loss_MSE
 
-                unsupervisedloss = args.adversarial_weight*(img_gen_loss + gt_gen_loss) + img_cycle_loss*args.lamda_img + gt_cycle_loss*args.lamda_gt + img_cycle_loss_perceptual * args.lamda_perceptual
+                unsupervisedloss = args.adversarial_weight*(img_gen_loss + gt_gen_loss) + resnet_img_cycle_loss + gt_cycle_loss*args.lamda_gt
 
                 gen_loss = fullsupervisedloss + unsupervisedloss
 
@@ -439,7 +478,7 @@ class semisuper_cycleGAN(object):
                     # Discriminator Computations
                     #################################################
 
-                    set_grad([self.Di, self.Ds], True)
+                    set_grad([self.Di, self.Ds, self.old_Di], True)
                     self.d_optimizer.zero_grad()
 
                     # Sample from history of generated images
@@ -448,16 +487,19 @@ class semisuper_cycleGAN(object):
                         fake_img = self.gauss_noise(fake_img.cpu())
                         fake_gt = self.gauss_noise(fake_gt.cpu())
 
+                    recon_img = Variable(torch.Tensor(new_img_fake_sample([recon_img.cpu().data.numpy()])[0]))
                     fake_img = Variable(torch.Tensor(img_fake_sample([fake_img.cpu().data.numpy()])[0]))
                     # lab_gt = Variable(torch.Tensor(gt_fake_sample([lab_gt.cpu().data.numpy()])[0]))
                     fake_gt = Variable(torch.Tensor(gt_fake_sample([fake_gt.cpu().data.numpy()])[0]))
 
-                    fake_img, lab_gt, fake_gt = utils.cuda([fake_img, lab_gt, fake_gt], args.gpu_ids)
+                    recon_img, fake_img, fake_gt = utils.cuda([recon_img, fake_img, fake_gt], args.gpu_ids)
 
                     # Forward pass through discriminators
                     #################################################
                     unl_img_dis = self.Di(unl_img)
                     fake_img_dis = self.Di(fake_img)
+                    resnet_recon_img_dis = self.old_Di(resnet_recon_img)
+                    resnet_fake_img_dis = self.old_Di(recon_img)
 
                     # lab_gt_dis = self.Ds(lab_gt)
 
@@ -469,25 +511,31 @@ class semisuper_cycleGAN(object):
                     fake_gt_discriminator = make_one_hot(fake_gt_discriminator, args.dataset, args.gpu_ids)
                     fake_gt_dis = self.Ds(fake_gt_discriminator.float())
     
-                    real_label = utils.cuda(Variable(torch.ones(unl_img_dis.size())), args.gpu_ids)
-                    fake_label = utils.cuda(Variable(torch.zeros(fake_img_dis.size())), args.gpu_ids)
+                    real_label_img = utils.cuda(Variable(torch.ones(unl_img_dis.size())), args.gpu_ids)
+                    fake_label_img = utils.cuda(Variable(torch.zeros(fake_img_dis.size())), args.gpu_ids)
+                    real_label_gt = utils.cuda(Variable(torch.ones(real_gt_dis.size())), args.gpu_ids)
+                    fake_label_gt = utils.cuda(Variable(torch.zeros(fake_gt_dis.size())), args.gpu_ids)
 
                     # Discriminator losses
                     ##################################################
-                    img_dis_real_loss = self.MSE(unl_img_dis, real_label)
-                    img_dis_fake_loss = self.MSE(fake_img_dis, fake_label)
-                    gt_dis_real_loss = self.MSE(real_gt_dis, real_label)
-                    gt_dis_fake_loss = self.MSE(fake_gt_dis, fake_label)
+                    img_dis_real_loss = self.MSE(unl_img_dis, real_label_img)
+                    img_dis_fake_loss = self.MSE(fake_img_dis, fake_label_img)
+                    gt_dis_real_loss = self.MSE(real_gt_dis, real_label_gt)
+                    gt_dis_fake_loss = self.MSE(fake_gt_dis, fake_label_gt)
                     # lab_gt_dis_fake_loss = self.MSE(lab_gt_dis, fake_label)
+
+                    cycle_img_dis_real_loss = self.MSE(resnet_recon_img_dis, real_label_img)
+                    cycle_img_dis_fake_loss = self.MSE(resnet_fake_img_dis, fake_label_img)
 
                     # Total discriminators losses
                     img_dis_loss = (img_dis_real_loss + img_dis_fake_loss)*0.5
                     gt_dis_loss = (gt_dis_real_loss + gt_dis_fake_loss)*0.5
                     # lab_gt_dis_loss = (gt_dis_real_loss + lab_gt_dis_fake_loss)*0.33
+                    cycle_img_dis_loss = cycle_img_dis_real_loss + cycle_img_dis_fake_loss
 
                     # Update discriminators
                     ##################################################
-                    discriminator_loss = args.discriminator_weight * (img_dis_loss + gt_dis_loss)
+                    discriminator_loss = args.discriminator_weight * (img_dis_loss + gt_dis_loss) + cycle_img_dis_loss
                     discriminator_loss.backward()
 
                     # lab_gt_dis_loss.backward()
@@ -497,9 +545,9 @@ class semisuper_cycleGAN(object):
                   (epoch, i + 1, min(len(labeled_loader), len(unlabeled_loader)),
                    img_dis_loss + gt_dis_loss, unsupervisedloss, fullsupervisedloss))
                 
-                self.writer_semisuper.add_scalars('Dis Loss', {'img_dis_loss':img_dis_loss, 'gt_dis_loss':gt_dis_loss}, len(labeled_loader)*epoch + i)
-                self.writer_semisuper.add_scalars('Unlabelled Loss', {'img_gen_loss': img_gen_loss, 'gt_gen_loss':gt_gen_loss, 'img_cycle_loss':img_cycle_loss, 'gt_cycle_loss':gt_cycle_loss, 'img_cycle_loss_perceptual':img_cycle_loss_perceptual}, len(labeled_loader)*epoch + i)
-                self.writer_semisuper.add_scalars('Labelled Loss', {'lab_loss_CE':lab_loss_CE, 'lab_loss_MSE':lab_loss_MSE, 'lab_loss_perceptual':lab_loss_perceptual}, len(labeled_loader)*epoch + i)
+                self.writer_semisuper.add_scalars('Dis Loss', {'img_dis_loss':img_dis_loss, 'gt_dis_loss':gt_dis_loss, 'cycle_img_dis_loss':cycle_img_dis_loss}, len(labeled_loader)*epoch + i)
+                self.writer_semisuper.add_scalars('Unlabelled Loss', {'img_gen_loss': img_gen_loss, 'gt_gen_loss':gt_gen_loss, 'img_cycle_loss':resnet_img_cycle_loss, 'gt_cycle_loss':gt_cycle_loss}, len(labeled_loader)*epoch + i)
+                self.writer_semisuper.add_scalars('Labelled Loss', {'lab_loss_CE':lab_loss_CE, 'lab_loss_MSE':lab_loss_MSE}, len(labeled_loader)*epoch + i)
 
                 counter += 1
 
@@ -512,7 +560,7 @@ class semisuper_cycleGAN(object):
 
                     outputs = self.Gsi(val_img)
                     outputs = self.interp(outputs)
-                    outputs = self.activation_tanh(outputs)
+                    outputs = self.activation_softmax(outputs)
 
                     pred = outputs.data.max(1)[1].cpu().numpy()
                     gt = val_gt.squeeze().data.cpu().numpy()
@@ -523,6 +571,8 @@ class semisuper_cycleGAN(object):
 
             self.running_metrics_val.reset()
 
+            print('The mIoU for the epoch is: ', score["Mean IoU : \t"])
+
             ### For displaying the images generated by generator on tensorboard using validation images
             val_image, val_gt, _ = iter(val_loader).next()
             val_image, val_gt = utils.cuda([val_image, val_gt], args.gpu_ids)
@@ -530,13 +580,16 @@ class semisuper_cycleGAN(object):
                 fake_label = self.Gsi(val_image).detach()
                 fake_label = self.interp(fake_label)
                 fake_label = self.activation_softmax(fake_label)
+                fake_label = fake_label.data.max(1)[1].squeeze_(1).squeeze_(0)
+                fake_label = fake_label.unsqueeze(1)
+                fake_label = make_one_hot(fake_label, args.dataset, args.gpu_ids)
                 fake_img = self.Gis(fake_label).detach()
                 fake_img = self.interp(fake_img)
-                fake_img = self.activation_tanh(fake_img)
+                # fake_img = self.activation_tanh(fake_img)
 
                 fake_img_from_labels = self.Gis(make_one_hot(val_gt, args.dataset, args.gpu_ids).float()).detach()
                 fake_img_from_labels = self.interp(fake_img_from_labels)
-                fake_img_from_labels = self.activation_tanh(fake_img_from_labels)
+                # fake_img_from_labels = self.activation_tanh(fake_img_from_labels)
                 fake_label_regenerated = self.Gsi(fake_img_from_labels).detach()
                 fake_label_regenerated = self.interp(fake_label_regenerated)
                 fake_label_regenerated = self.activation_softmax(fake_label_regenerated)
